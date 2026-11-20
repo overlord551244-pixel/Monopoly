@@ -1,0 +1,2418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monopoly Online</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#0d121b;--panel:#171e2c;--panel2:#212b40;--line:#2c3856;--text:#e9effc;--muted:#8d9cc0;--accent:#4cc9f0;--good:#2bb673;--bad:#e5484d;--warn:#f4c20d}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.4 "Segoe UI",system-ui,-apple-system,sans-serif;overflow-x:hidden}
+.hidden{display:none!important}
+button{font:inherit;cursor:pointer;border:0;border-radius:9px;padding:9px 16px;background:var(--panel2);color:var(--text);font-weight:600}
+button:hover:not(:disabled){filter:brightness(1.2)}
+button:disabled{opacity:.38;cursor:not-allowed}
+button.primary{background:linear-gradient(135deg,#4cc9f0,#6b7cff);color:#06101f}
+button.good{background:var(--good);color:#04170d}
+button.bad{background:var(--bad);color:#fff}
+button.ghost{background:transparent;border:1px solid var(--line)}
+button.mini{padding:4px 8px;font-size:12px;border-radius:7px}
+input,select{font:inherit;color:var(--text);background:#0a0f17;border:1px solid var(--line);border-radius:9px;padding:10px 12px;width:100%}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+h1,h2,h3{font-weight:800}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px}
+.muted{color:var(--muted)}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid #fff;flex:0 0 auto}
+
+/* toast + connection */
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(30px);background:#000d;border:1px solid var(--line);padding:10px 18px;border-radius:10px;z-index:99;opacity:0;pointer-events:none;transition:.25s;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%)}
+#conn{position:fixed;top:10px;right:12px;z-index:60;font-size:12px;color:var(--bad);background:#000a;padding:3px 10px;border-radius:99px}
+
+/* home + lobby */
+.screen{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px}
+.screen .card{width:100%;max-width:520px}
+.title{font-size:42px;letter-spacing:4px;text-align:center;background:linear-gradient(90deg,#ed1b24,#f7941d,#fef200,#1fb25a,#0072bb);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:4px}
+.sub{text-align:center;color:var(--muted);margin-bottom:22px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:center}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.invite{background:#12304a;border:1px solid #1f5e8c;border-radius:10px;padding:12px;text-align:center}
+.bigcode{font-size:46px;font-weight:900;letter-spacing:10px;text-align:center;font-family:Consolas,monospace;color:var(--accent)}
+.plist{display:flex;flex-direction:column;gap:8px}
+.pitem{display:flex;align-items:center;gap:10px;background:var(--panel2);padding:9px 12px;border-radius:10px}
+.pitem .grow{flex:1}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.sw{width:26px;height:26px;border-radius:50%;border:3px solid transparent;cursor:pointer;padding:0}
+.sw.sel{border-color:#fff}
+.sw:disabled{opacity:.2}
+.settings label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0}
+.settings input[type=checkbox]{width:20px;height:20px}
+.settings select{width:auto}
+
+/* game layout */
+#game{display:flex;gap:14px;padding:12px;height:100vh;align-items:flex-start}
+#boardWrap{flex:0 0 auto;width:min(calc(100vh - 24px),calc(100vw - 440px))}
+#side{flex:1;min-width:330px;height:calc(100vh - 24px);display:flex;flex-direction:column;gap:10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.panel h3{font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+#sideTop{display:flex;align-items:center;gap:10px;justify-content:space-between}
+#players{display:flex;flex-direction:column;gap:5px}
+.pl{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;background:var(--panel2);border:2px solid transparent}
+.pl.turn{border-color:var(--accent);box-shadow:0 0 12px #4cc9f044}
+.pl.out{opacity:.4;text-decoration:line-through}
+.pl .pn{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl .pc{font-weight:800;font-variant-numeric:tabular-nums}
+.badge{font-size:11px;background:#0006;border-radius:6px;padding:1px 6px;margin-left:4px}
+#assets{flex:1;min-height:120px;overflow:auto}
+.grp{margin-bottom:8px}
+.arow{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #ffffff10;flex-wrap:wrap}
+.arow .chip{width:12px;height:22px;border-radius:3px;flex:0 0 auto;border:1px solid #0006}
+.arow .an{flex:1;min-width:110px;font-size:13px;cursor:pointer}
+.arow .an.m{text-decoration:line-through;color:var(--muted)}
+.hs2{font-size:11px;color:#6fe39a}
+#feedWrap{height:200px;display:flex;flex-direction:column}
+#feed{flex:1;overflow:auto;font-size:13px;display:flex;flex-direction:column;gap:2px;padding-right:4px}
+#feed .log{color:var(--muted)}
+#chatForm{display:flex;gap:6px;margin-top:6px}
+#chatForm input{padding:7px 10px}
+
+/* board */
+#board{display:grid;grid-template-columns:1.55fr repeat(9,1fr) 1.55fr;grid-template-rows:1.55fr repeat(9,1fr) 1.55fr;width:100%;aspect-ratio:1/1;container-type:inline-size;background:#bfdcc4;border:3px solid #05080d;border-radius:8px;overflow:hidden;position:relative;font-family:"Segoe UI",system-ui,sans-serif}
+.cell{position:relative;background:#f4f8f1;border:1px solid #1d2a21;color:#14201a;display:flex;overflow:hidden;font-size:max(6px,.95cqw);line-height:1.12;cursor:pointer;text-align:center;font-weight:600}
+.cell:hover{background:#fff}
+.cell.b{flex-direction:column}.cell.t{flex-direction:column-reverse}.cell.l{flex-direction:row-reverse}.cell.r{flex-direction:row}
+.cell .bar{flex:0 0 24%;display:flex;align-items:center;justify-content:center;border:0 solid #1d2a21}
+.cell.b .bar{border-bottom-width:1px}.cell.t .bar{border-top-width:1px}.cell.l .bar{border-left-width:1px}.cell.r .bar{border-right-width:1px}
+.hs{display:flex;gap:.15cqw}
+.cell.l .hs,.cell.r .hs{flex-direction:column}
+.hs i{display:block;width:.95cqw;height:.95cqw;background:#18a957;border:1px solid #063}
+.hs i.H{background:#e5252a;border-color:#600;width:1.8cqw}
+.cell.l .hs i.H,.cell.r .hs i.H{width:.95cqw;height:1.8cqw}
+.cell .body{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:.25cqw;min-width:0}
+.cell .nm{word-break:break-word}
+.cell .pr{margin-top:.15cqw;font-weight:800}
+.cell .ico{font-size:2.2cqw;line-height:1}
+.cell.c{font-size:max(7px,1.15cqw);font-weight:800;justify-content:center;align-items:center;flex-direction:column;background:#e6efe3}
+.cell.c .big{font-size:2.4cqw;font-weight:900;letter-spacing:.1cqw}
+.cell.t-chance{background:#ffd9a6}
+.cell.t-chest{background:#c6e5fb}
+.cell.land{animation:landp .7s ease-in-out 3;z-index:2}
+@keyframes landp{0%,100%{filter:none;transform:scale(1)}50%{filter:brightness(1.12);transform:scale(1.12);box-shadow:0 0 1.4cqw .5cqw #ffd54a}}
+.cell.mort::after{content:"M";position:absolute;inset:0;background:repeating-linear-gradient(135deg,#0000 0 .7cqw,#0003 .7cqw 1.4cqw);display:flex;align-items:center;justify-content:center;font-size:2cqw;font-weight:900;color:#0008}
+.tokens{position:absolute;left:0;right:0;bottom:.3cqw;display:flex;flex-wrap:wrap;justify-content:center;pointer-events:none;z-index:3}
+.cell.t .tokens{bottom:auto;top:.3cqw}
+.tok{width:2.1cqw;height:2.1cqw;border-radius:50%;border:.22cqw solid #fff;box-shadow:0 0 0 .12cqw #000,0 .2cqw .4cqw #0008;color:#fff;font-weight:900;font-size:1.05cqw;display:flex;align-items:center;justify-content:center;margin:.1cqw;text-shadow:0 0 2px #000}
+.tok.jail{box-shadow:0 0 0 .22cqw #e5252a}
+#center{grid-row:2/11;grid-column:2/11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:max(6px,1cqw);padding:1.5cqw;text-align:center;color:#12201a;overflow:auto;position:relative}
+#center .logo{position:absolute;top:1.2cqw;left:0;right:0;font-weight:900;letter-spacing:.8cqw;font-size:3.4cqw;color:#c8362f;opacity:.88;text-shadow:0 0 .2cqw #fff}
+.c-title{font-size:max(14px,2.2cqw);font-weight:800;display:flex;align-items:center;gap:.8cqw}
+.c-msg{font-size:max(11px,1.45cqw);max-width:90%;color:#26382f}
+.dice{display:flex;gap:1.2cqw;align-items:center}
+.die{width:max(46px,7.2cqw);height:max(46px,7.2cqw);background:#fff;border-radius:1.3cqw;box-shadow:0 .3cqw .8cqw #0004;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);padding:max(5px,.9cqw);gap:.15cqw;border:.15cqw solid #1a1f2a33}
+.die i{border-radius:50%;margin:10%}
+.die i.on{background:radial-gradient(circle at 35% 30%,#555,#111 70%)}
+.die.roll{animation:wob .16s infinite alternate}
+@keyframes wob{from{transform:rotate(-7deg)}to{transform:rotate(7deg)}}
+.dice.clk{cursor:pointer}
+.ticker{font-size:max(10px,1.15cqw);color:#3b4d43;max-width:92%;min-height:2.4em;line-height:1.25}
+.ticker div{opacity:.8}.ticker div:last-child{opacity:1;font-weight:700}
+.delta{font-weight:900;font-size:.85em;margin-right:6px;animation:dl 2.6s ease-out forwards;display:inline-block}
+.delta.up{color:#4ade80}.delta.dn{color:#ff6b6b}
+@keyframes dl{0%{transform:translateY(8px);opacity:0}15%{transform:none;opacity:1}80%{opacity:1}100%{opacity:0}}
+.total{font-size:max(14px,2.1cqw);font-weight:800}
+.acts{display:flex;gap:.9cqw;flex-wrap:wrap;justify-content:center}
+.acts button{font-size:max(12px,1.5cqw);padding:max(7px,.8cqw) max(12px,1.8cqw)}
+.pot{font-size:max(11px,1.35cqw);background:#fff8;padding:.3cqw 1.1cqw;border-radius:99px;font-weight:700}
+.pcard{background:#fff;border:2px solid #14201a;border-radius:6px;width:max(130px,16cqw);overflow:hidden;box-shadow:0 .3cqw .8cqw #0004;font-size:max(10px,1.2cqw)}
+.pcard .ph{padding:.6cqw .4cqw;font-weight:800}
+.pcard .pb{padding:.5cqw .6cqw;color:#14201a;line-height:1.35}
+.bidbox{background:#fff9;border-radius:1cqw;padding:.8cqw 1.4cqw}
+.bidbox .hi{font-size:max(18px,3cqw);font-weight:900}
+.bidbox .tm{font-size:max(12px,1.6cqw);font-weight:700;color:#b02a2a}
+
+/* modals */
+.ov{position:fixed;inset:0;background:#000a;z-index:70;display:flex;align-items:center;justify-content:center;padding:16px}
+.ov .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:640px;width:100%;max-height:92vh;overflow:auto}
+.ov .box h2{margin-bottom:10px}
+.tgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tcol{background:var(--panel2);border-radius:12px;padding:12px}
+.tcol h3{font-size:14px;margin-bottom:8px}
+.tp{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:14px}
+.tp input{width:auto}
+.tp .chip{width:10px;height:18px;border-radius:2px;border:1px solid #0006}
+.pcardbig{background:#fff;color:#14201a;border-radius:10px;overflow:hidden;border:2px solid #000;max-width:340px;margin:0 auto}
+.pcardbig .ph{padding:14px;text-align:center;font-size:20px;font-weight:900}
+.pcardbig table{width:100%;border-collapse:collapse;font-size:14px}
+.pcardbig td{padding:4px 14px}
+.pcardbig td:last-child{text-align:right;font-weight:700}
+.pcardbig .ft{padding:10px 14px;background:#eee;font-size:13px}
+.gcard{border-radius:14px;padding:26px;text-align:center;max-width:360px;margin:0 auto;border:4px solid #000;box-shadow:0 10px 40px #000a}
+.gcard h3{letter-spacing:3px;margin-bottom:12px}
+.gcard p{font-size:19px;font-weight:700}
+.win{font-size:34px;text-align:center;margin:8px 0 16px}
+
+@media (max-width:980px){
+  #game{flex-direction:column;height:auto;align-items:stretch}
+  #boardWrap{width:100%}
+  #side{height:auto;min-width:0}
+  #assets{max-height:340px}
+}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div id="conn" class="hidden">Reconnecting…</div>
+
+<!-- HOME -->
+<section id="home" class="screen hidden">
+  <div class="card stack">
+    <div><div class="title">MONOPOLY</div><div class="sub">Play with friends online, or take on the computer.</div></div>
+    <div id="inviteBanner" class="invite hidden"></div>
+    <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
+    <button id="createBtn" class="primary">Create a room</button>
+    <div class="or">or play against the computer</div>
+    <div class="row"><select id="soloCount" title="Number of computer opponents" style="flex:1"><option value="1">1 opponent</option><option value="2">2 opponents</option><option value="3" selected>3 opponents</option><option value="4">4 opponents</option><option value="5">5 opponents</option><option value="6">6 opponents</option><option value="7">7 opponents</option></select><select id="soloLevel" title="Computer skill" style="flex:1"><option value="strong" selected>Strong</option><option value="casual">Casual</option></select><button id="soloBtn" class="good">Play</button></div>
+    <div class="or">or join a friend's room</div>
+    <div class="row"><input id="codeInput" maxlength="5" placeholder="ROOM CODE" autocomplete="off" style="text-transform:uppercase;letter-spacing:4px;font-weight:800;text-align:center"><button id="joinBtn" class="good">Join</button></div>
+    <button id="rejoinBtn" class="ghost hidden"></button>
+    <div class="muted" style="font-size:12px;text-align:center;line-height:1.5">When you create a room, your browser is the game host. Friends connect straight to you, so keep this page open while you play.</div>
+  </div>
+</section>
+
+<!-- LOBBY -->
+<section id="lobby" class="screen hidden">
+  <div class="card stack">
+    <div class="muted" style="text-align:center;letter-spacing:3px;font-size:12px">ROOM CODE</div>
+    <div id="lobbyCode" class="bigcode"></div>
+    <div id="netStatus" class="muted" style="text-align:center;font-size:13px"></div>
+    <div class="row" id="inviteRow"><input id="inviteLink" readonly><button data-a="copyInvite" class="primary">Copy link</button></div>
+    <div id="inviteNote" class="muted hidden" style="font-size:13px;line-height:1.5;text-align:center"></div>
+    <div class="row"><button data-a="copyCode" class="ghost" style="flex:1">Copy code</button><button data-a="shareInvite" id="shareBtn" class="ghost hidden" style="flex:1">Share…</button></div>
+    <div><h3 class="muted" style="font-size:12px;letter-spacing:2px;margin-bottom:8px">PLAYERS <span id="pcount"></span></h3><div id="lobbyPlayers" class="plist"></div></div>
+    <div><h3 class="muted" style="font-size:12px;letter-spacing:2px;margin-bottom:6px">YOUR TOKEN COLOR</h3><div id="swatches" class="swatches"></div></div>
+    <div class="settings" id="lobbySettings"></div>
+    <div id="lobbyActions" class="stack"></div>
+  </div>
+</section>
+
+<!-- GAME -->
+<section id="game" class="hidden">
+  <div id="boardWrap"><div id="board"><div id="center"></div></div></div>
+  <aside id="side">
+    <div class="panel" id="sideTop">
+      <div><b style="letter-spacing:3px">ROOM <span id="gCode"></span></b></div>
+      <div class="row"><label class="muted" style="font-size:12px">Game speed <select id="spdSel"><option value="relaxed">Relaxed</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label></div>
+      <div class="row"><button class="mini ghost" data-a="copyInvite">Copy invite</button><button class="mini ghost" data-a="resign" id="resignBtn">Resign</button></div>
+    </div>
+    <div class="panel"><h3>PLAYERS</h3><div id="players"></div></div>
+    <div class="panel" id="assets"></div>
+    <div class="panel" id="feedWrap">
+      <h3>LOG &amp; CHAT</h3>
+      <div id="feed"></div>
+      <form id="chatForm"><input id="chatInput" maxlength="200" placeholder="Say something…" autocomplete="off"><button class="mini primary" type="submit">Send</button></form>
+    </div>
+  </aside>
+</section>
+
+<div id="modal" class="ov hidden"></div>
+<div id="incoming" class="ov hidden"></div>
+<div id="cardpop" class="ov hidden"></div>
+<div id="endscreen" class="ov hidden"></div>
+
+<script>
+'use strict';
+const BOARD_MOD = (() => {
+'use strict';
+const module = { exports: {} };
+// Static board data (shared by the server logic and sent to the browser via /api/board).
+
+const GROUP_COLORS = {
+  brown: '#955436', lightblue: '#aae0fa', pink: '#d93a96', orange: '#f7941d',
+  red: '#ed1b24', yellow: '#fef200', green: '#1fb25a', darkblue: '#0072bb'
+};
+
+const SQUARES = new Array(40);
+const set = (i, o) => { SQUARES[i] = Object.assign({ i }, o); };
+const street = (i, name, group, price, house, rent) => set(i, { type: 'street', name, group, price, house, rent });
+const rail = (i, name) => set(i, { type: 'rail', name, price: 200 });
+const util = (i, name) => set(i, { type: 'util', name, price: 150 });
+const chance = i => set(i, { type: 'chance', name: 'Chance' });
+const chest = i => set(i, { type: 'chest', name: 'Community Chest' });
+
+set(0, { type: 'go', name: 'GO' });
+street(1, 'Mediterranean Avenue', 'brown', 60, 50, [2, 10, 30, 90, 160, 250]);
+chest(2);
+street(3, 'Baltic Avenue', 'brown', 60, 50, [4, 20, 60, 180, 320, 450]);
+set(4, { type: 'tax', name: 'Income Tax', amount: 200 });
+rail(5, 'Reading Railroad');
+street(6, 'Oriental Avenue', 'lightblue', 100, 50, [6, 30, 90, 270, 400, 550]);
+chance(7);
+street(8, 'Vermont Avenue', 'lightblue', 100, 50, [6, 30, 90, 270, 400, 550]);
+street(9, 'Connecticut Avenue', 'lightblue', 120, 50, [8, 40, 100, 300, 450, 600]);
+set(10, { type: 'jail', name: 'Jail' });
+street(11, 'St. Charles Place', 'pink', 140, 100, [10, 50, 150, 450, 625, 750]);
+util(12, 'Electric Company');
+street(13, 'States Avenue', 'pink', 140, 100, [10, 50, 150, 450, 625, 750]);
+street(14, 'Virginia Avenue', 'pink', 160, 100, [12, 60, 180, 500, 700, 900]);
+rail(15, 'Pennsylvania Railroad');
+street(16, 'St. James Place', 'orange', 180, 100, [14, 70, 200, 550, 750, 950]);
+chest(17);
+street(18, 'Tennessee Avenue', 'orange', 180, 100, [14, 70, 200, 550, 750, 950]);
+street(19, 'New York Avenue', 'orange', 200, 100, [16, 80, 220, 600, 800, 1000]);
+set(20, { type: 'parking', name: 'Free Parking' });
+street(21, 'Kentucky Avenue', 'red', 220, 150, [18, 90, 250, 700, 875, 1050]);
+chance(22);
+street(23, 'Indiana Avenue', 'red', 220, 150, [18, 90, 250, 700, 875, 1050]);
+street(24, 'Illinois Avenue', 'red', 240, 150, [20, 100, 300, 750, 925, 1100]);
+rail(25, 'B&O Railroad');
+street(26, 'Atlantic Avenue', 'yellow', 260, 150, [22, 110, 330, 800, 975, 1150]);
+street(27, 'Ventnor Avenue', 'yellow', 260, 150, [22, 110, 330, 800, 975, 1150]);
+util(28, 'Water Works');
+street(29, 'Marvin Gardens', 'yellow', 280, 150, [24, 120, 360, 850, 1025, 1200]);
+set(30, { type: 'gotojail', name: 'Go To Jail' });
+street(31, 'Pacific Avenue', 'green', 300, 200, [26, 130, 390, 900, 1100, 1275]);
+street(32, 'North Carolina Avenue', 'green', 300, 200, [26, 130, 390, 900, 1100, 1275]);
+chest(33);
+street(34, 'Pennsylvania Avenue', 'green', 320, 200, [28, 150, 450, 1000, 1200, 1400]);
+rail(35, 'Short Line');
+chance(36);
+street(37, 'Park Place', 'darkblue', 350, 200, [35, 175, 500, 1100, 1300, 1500]);
+set(38, { type: 'tax', name: 'Luxury Tax', amount: 100 });
+street(39, 'Boardwalk', 'darkblue', 400, 200, [50, 200, 600, 1400, 1700, 2000]);
+
+const GROUPS = {};
+for (const s of SQUARES) if (s.type === 'street') (GROUPS[s.group] = GROUPS[s.group] || []).push(s.i);
+const RAILS = SQUARES.filter(s => s.type === 'rail').map(s => s.i);
+const UTILS = SQUARES.filter(s => s.type === 'util').map(s => s.i);
+
+module.exports = { SQUARES, GROUPS, GROUP_COLORS, RAILS, UTILS };
+
+return module.exports;
+})();
+const GAME_MOD = (() => {
+'use strict';
+const module = { exports: {} };
+// Server-authoritative Monopoly rules. No dependencies.
+
+const crypto = {
+  randomInt(n) { const a = new Uint32Array(1); const lim = Math.floor(4294967296 / n) * n; let x; do { globalThis.crypto.getRandomValues(a); x = a[0]; } while (x >= lim); return x % n; },
+  randomBytes(n) { const a = new Uint8Array(n); globalThis.crypto.getRandomValues(a); const hex = [...a].map(b => b.toString(16).padStart(2, '0')).join(''); return { toString: () => hex }; }
+};
+const { SQUARES, GROUPS, RAILS, UTILS } = BOARD_MOD;
+
+const COLORS = ['#e63946', '#2a7de1', '#2bb673', '#f4c20d', '#9b5de5', '#ff8a1f', '#ff5fa2', '#17bebb'];
+const MAX_PLAYERS = 8;
+const MIN_PLAYERS = 2;
+const JAIL_FEE = 50;
+const GO_SALARY = 200;
+const AUCTION_START_MS = 20000;
+const AUCTION_BID_MS = 10000;
+
+const CHANCE = [
+  { t: 'Advance to GO. Collect $200.', k: 'goto', to: 0 },
+  { t: 'Advance to Illinois Avenue.', k: 'goto', to: 24 },
+  { t: 'Advance to St. Charles Place.', k: 'goto', to: 11 },
+  { t: 'Advance to the nearest Utility. Pay the owner 10x the dice roll.', k: 'nearest', kind: 'util' },
+  { t: 'Advance to the nearest Railroad. Pay the owner double rent.', k: 'nearest', kind: 'rail' },
+  { t: 'Advance to the nearest Railroad. Pay the owner double rent.', k: 'nearest', kind: 'rail' },
+  { t: 'The bank pays you a $50 dividend.', k: 'cash', amt: 50 },
+  { t: 'Get Out of Jail Free. Keep this card until you need it.', k: 'jailcard' },
+  { t: 'Go back 3 spaces.', k: 'back', n: 3 },
+  { t: 'Go directly to Jail. Do not pass GO.', k: 'jail' },
+  { t: 'General repairs: pay $25 per house and $100 per hotel.', k: 'repairs', house: 25, hotel: 100 },
+  { t: 'Speeding fine. Pay $15.', k: 'pay', amt: 15 },
+  { t: 'Take a trip to Reading Railroad.', k: 'goto', to: 5 },
+  { t: 'Advance to Boardwalk.', k: 'goto', to: 39 },
+  { t: 'You are elected Chairman of the Board. Pay each player $50.', k: 'payEach', amt: 50 },
+  { t: 'Your building loan matures. Collect $150.', k: 'cash', amt: 150 }
+];
+const CHEST = [
+  { t: 'Advance to GO. Collect $200.', k: 'goto', to: 0 },
+  { t: 'Bank error in your favor. Collect $200.', k: 'cash', amt: 200 },
+  { t: "Doctor's fee. Pay $50.", k: 'pay', amt: 50 },
+  { t: 'You sell stock and get $50.', k: 'cash', amt: 50 },
+  { t: 'Get Out of Jail Free. Keep this card until you need it.', k: 'jailcard' },
+  { t: 'Go directly to Jail. Do not pass GO.', k: 'jail' },
+  { t: 'Holiday fund matures. Receive $100.', k: 'cash', amt: 100 },
+  { t: 'Income tax refund. Collect $20.', k: 'cash', amt: 20 },
+  { t: 'It is your birthday. Collect $10 from every player.', k: 'collectEach', amt: 10 },
+  { t: 'Life insurance matures. Collect $100.', k: 'cash', amt: 100 },
+  { t: 'Hospital fees. Pay $100.', k: 'pay', amt: 100 },
+  { t: 'School fees. Pay $50.', k: 'pay', amt: 50 },
+  { t: 'You receive a $25 consultancy fee.', k: 'cash', amt: 25 },
+  { t: 'Street repairs: pay $40 per house and $115 per hotel.', k: 'repairs', house: 40, hotel: 115 },
+  { t: 'You win second prize in a beauty contest. Collect $10.', k: 'cash', amt: 10 },
+  { t: 'You inherit $100.', k: 'cash', amt: 100 }
+];
+
+// ---------- helpers ----------
+const rnd = n => crypto.randomInt(n);
+const rollDie = () => rnd(6) + 1;
+const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const newToken = () => crypto.randomBytes(16).toString('hex');
+const uid = () => crypto.randomBytes(5).toString('hex');
+const fail = error => ({ error });
+const getP = (room, id) => room.players.find(p => p.id === id);
+const activePlayers = room => room.players.filter(p => !p.bankrupt);
+const curP = room => getP(room, room.turn.pid);
+const connected = (room, pid) => { const bp = room.players.find(p => p.id === pid); if (bp && bp.bot) return true; for (const c of room.conns) if (c.pid === pid) return true; return false; };
+const ownedIdx = (room, pid) => { const out = []; room.props.forEach((pr, i) => { if (pr && pr.owner === pid) out.push(i); }); return out; };
+const cleanName = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16);
+
+function log(room, text) {
+  room.feed.push({ type: 'log', t: Date.now(), text });
+  if (room.feed.length > 300) room.feed.splice(0, room.feed.length - 300);
+}
+
+function uniqueName(room, base) {
+  let name = base, n = 2;
+  while (room.players.some(p => p.name.toLowerCase() === name.toLowerCase())) name = `${base} ${n++}`;
+  return name;
+}
+
+// ---------- rooms & lobby ----------
+function createRoom(code, hostName) {
+  const room = {
+    code, created: Date.now(), last: Date.now(), phase: 'lobby', hostId: null,
+    settings: { startCash: 1500, freeParking: false, auctions: true, botLevel: 'strong' },
+    players: [], nextPid: 1,
+    props: new Array(40).fill(null), housesLeft: 32, hotelsLeft: 12, pot: 0,
+    turn: null, trade: null, decks: null, lastRoll: null, rollId: 0, lastCard: null,
+    feed: [], winner: null, timer: null, conns: new Set(), onChange: () => {}, lastChat: {}
+  };
+  const p = addPlayer(room, hostName);
+  room.hostId = p.id;
+  log(room, `${p.name} created the room.`);
+  return { room, player: p };
+}
+
+const BOT_NAMES = ['Botley', 'Rex', 'Penny', 'Moneybags', 'Tycoon', 'Lucky', 'Duke', 'Ace'];
+function addPlayer(room, name, bot) {
+  const used = new Set(room.players.map(p => p.color));
+  const p = {
+    bot: !!bot, valueMul: 0.7 + Math.random() * 0.5,
+    id: 'p' + (room.nextPid++), token: newToken(),
+    name: uniqueName(room, cleanName(name) || 'Player'),
+    color: COLORS.find(c => !used.has(c)) || COLORS[0],
+    cash: 0, pos: 0, jail: false, jailTurns: 0, bankrupt: false, cards: []
+  };
+  room.players.push(p);
+  return p;
+}
+
+function join(room, name) {
+  if (room.phase !== 'lobby') return fail('That game has already started.');
+  if (room.players.length >= MAX_PLAYERS) return fail('That room is full.');
+  const p = addPlayer(room, name);
+  log(room, `${p.name} joined.`);
+  return { player: p };
+}
+
+function removeFromLobby(room, target) {
+  room.players = room.players.filter(p => p.id !== target.id);
+  if (!room.players.some(p => !p.bot)) { room.players = []; return; }
+  if (room.hostId === target.id) room.hostId = room.players.find(p => !p.bot).id;
+}
+
+function startGame(room) {
+  room.phase = 'playing';
+  room.pot = 0; room.housesLeft = 32; room.hotelsLeft = 12;
+  room.trade = null; room.winner = null; room.lastCard = null; room.lastRoll = null; room.rollId = 0;
+  room.players = shuffle(room.players);
+  for (const p of room.players) {
+    p.cash = room.settings.startCash; p.pos = 0; p.jail = false; p.jailTurns = 0; p.bankrupt = false; p.cards = [];
+  }
+  room.props = SQUARES.map(s => (s.type === 'street' || s.type === 'rail' || s.type === 'util') ? { owner: null, houses: 0, mortgaged: false } : null);
+  const deck = () => ({ order: shuffle([...Array(16).keys()]), pos: 0, held: new Set() });
+  room.decks = { chance: deck(), chest: deck() };
+  room.turn = { pid: room.players[0].id, phase: 'roll', doubles: 0, data: null };
+  room.feed = [];
+  log(room, `The game begins! Turn order: ${room.players.map(p => p.name).join(', ')}.`);
+  log(room, `${room.players[0].name}'s turn.`);
+}
+
+// ---------- money ----------
+function calcRent(room, i, dice, opts) {
+  opts = opts || {};
+  const s = SQUARES[i], pr = room.props[i];
+  if (!pr || !pr.owner || pr.mortgaged) return 0;
+  if (s.type === 'street') {
+    if (pr.houses > 0) return s.rent[pr.houses];
+    const full = GROUPS[s.group].every(j => room.props[j].owner === pr.owner);
+    return s.rent[0] * (full ? 2 : 1);
+  }
+  if (s.type === 'rail') {
+    const n = RAILS.filter(j => room.props[j].owner === pr.owner).length;
+    const r = 25 * Math.pow(2, n - 1);
+    return opts.double ? r * 2 : r;
+  }
+  if (s.type === 'util') {
+    const n = UTILS.filter(j => room.props[j].owner === pr.owner).length;
+    return (opts.tenX || n === 2 ? 10 : 4) * dice;
+  }
+  return 0;
+}
+
+function pay(room, p, amount, creditor, d) {
+  p.cash -= amount;
+  if (creditor === 'bank') {
+    if (room.settings.freeParking) room.pot += amount;
+  } else if (creditor === 'each') {
+    const others = activePlayers(room).filter(o => o.id !== p.id);
+    const each = d && d.each ? d.each : Math.floor(amount / Math.max(1, others.length));
+    others.forEach(o => { o.cash += each; });
+  } else {
+    getP(room, creditor).cash += amount;
+  }
+}
+
+// Returns true if paid now; otherwise puts the turn into the 'debt' phase and returns false.
+function charge(room, p, amount, creditor, reason, after, extra) {
+  if (amount <= 0) return true;
+  if (p.cash >= amount) { pay(room, p, amount, creditor, extra); return true; }
+  room.turn.phase = 'debt';
+  room.turn.data = Object.assign({ debtor: p.id, creditor, amount, reason, after: after || null }, extra || {});
+  log(room, `${p.name} owes $${amount} (${reason}) but only has $${p.cash}. Raise cash or go bankrupt.`);
+  return false;
+}
+
+function trySettle(room) {
+  const t = room.turn;
+  if (!t || t.phase !== 'debt') return;
+  const d = t.data, debtor = getP(room, d.debtor);
+  if (debtor.cash < d.amount) return;
+  pay(room, debtor, d.amount, d.creditor, d);
+  log(room, `${debtor.name} paid the $${d.amount} debt.`);
+  t.phase = 'resolving'; t.data = null;
+  if (d.after && d.after.type === 'jailMove') {
+    debtor.jail = false; debtor.jailTurns = 0;
+    doMove(room, debtor, d.after.total);
+  } else finish(room);
+}
+
+// ---------- turn flow ----------
+function finish(room) {
+  const t = room.turn, p = curP(room);
+  t.data = null;
+  if (p.bankrupt) return nextTurn(room);
+  t.phase = (t.doubles > 0 && !p.jail) ? 'roll' : 'end';
+  if (t.phase === 'roll') log(room, `${p.name} rolled doubles and goes again.`);
+}
+
+function nextTurn(room) {
+  clearTimeout(room.timer); room.timer = null;
+  if (activePlayers(room).length <= 1) return endGame(room);
+  const idx = room.players.findIndex(p => p.id === room.turn.pid);
+  for (let k = 1; k <= room.players.length; k++) {
+    const c = room.players[(idx + k) % room.players.length];
+    if (!c.bankrupt) {
+      room.turn = { pid: c.id, phase: 'roll', doubles: 0, data: null };
+      log(room, `${c.name}'s turn.`);
+      return;
+    }
+  }
+}
+
+function endGame(room) {
+  clearTimeout(room.timer); room.timer = null;
+  const alive = activePlayers(room);
+  room.phase = 'ended';
+  room.winner = alive.length ? alive[0].id : null;
+  room.trade = null;
+  if (alive.length) log(room, `${alive[0].name} wins the game!`);
+}
+
+function sendToJail(room, p) {
+  p.pos = 10; p.jail = true; p.jailTurns = 0;
+  if (room.turn && room.turn.pid === p.id) room.turn.doubles = 0;
+  log(room, `${p.name} goes to Jail.`);
+}
+
+function advanceTo(room, p, dest) {
+  if (dest < p.pos) { p.cash += GO_SALARY; log(room, `${p.name} passes GO and collects $${GO_SALARY}.`); }
+  p.pos = dest;
+}
+
+function doMove(room, p, total) {
+  room.turn.phase = 'resolving';
+  advanceTo(room, p, (p.pos + total) % 40);
+  log(room, `${p.name} lands on ${SQUARES[p.pos].name}.`);
+  resolveLanding(room, p, { dice: total });
+  if (room.turn.phase === 'resolving') finish(room);
+}
+
+function resolveLanding(room, p, ctx) {
+  const s = SQUARES[p.pos], t = room.turn;
+  switch (s.type) {
+    case 'parking':
+      if (room.settings.freeParking && room.pot > 0) {
+        log(room, `${p.name} collects $${room.pot} from Free Parking!`);
+        p.cash += room.pot; room.pot = 0;
+      }
+      return;
+    case 'gotojail': sendToJail(room, p); return;
+    case 'tax': charge(room, p, s.amount, 'bank', s.name); return;
+    case 'chance': case 'chest': drawCard(room, p, s.type); return;
+    case 'street': case 'rail': case 'util': {
+      const pr = room.props[p.pos];
+      if (!pr.owner) { t.phase = 'buy'; t.data = { index: p.pos }; return; }
+      if (pr.owner === p.id || pr.mortgaged) return;
+      const owner = getP(room, pr.owner);
+      const rent = calcRent(room, p.pos, ctx.dice, ctx);
+      if (rent > 0) {
+        log(room, `${p.name} pays $${rent} rent to ${owner.name}.`);
+        charge(room, p, rent, owner.id, 'rent');
+      }
+      return;
+    }
+    default: return; // go, jail (just visiting)
+  }
+}
+
+function drawCard(room, p, deckName) {
+  const deck = room.decks[deckName], list = deckName === 'chance' ? CHANCE : CHEST;
+  let id;
+  for (;;) { id = deck.order[deck.pos % 16]; deck.pos++; if (!deck.held.has(id)) break; }
+  const c = list[id];
+  room.lastCard = { n: (room.lastCard ? room.lastCard.n : 0) + 1, deck: deckName, text: c.t, pid: p.id };
+  log(room, `${p.name} drew ${deckName === 'chance' ? 'Chance' : 'Community Chest'}: ${c.t}`);
+  const dice = room.lastRoll ? room.lastRoll[0] + room.lastRoll[1] : 7;
+  switch (c.k) {
+    case 'goto': advanceTo(room, p, c.to); resolveLanding(room, p, { dice }); break;
+    case 'nearest': {
+      const list2 = c.kind === 'rail' ? RAILS : UTILS;
+      const dest = list2.find(i => i > p.pos);
+      advanceTo(room, p, dest === undefined ? list2[0] : dest);
+      if (c.kind === 'rail') resolveLanding(room, p, { dice, double: true });
+      else {
+        const d = rollDie() + rollDie();
+        log(room, `${p.name} rolls ${d} for the utility.`);
+        resolveLanding(room, p, { dice: d, tenX: true });
+      }
+      break;
+    }
+    case 'cash': p.cash += c.amt; break;
+    case 'back': p.pos = (p.pos - c.n + 40) % 40; log(room, `${p.name} moves back to ${SQUARES[p.pos].name}.`); resolveLanding(room, p, { dice }); break;
+    case 'jail': sendToJail(room, p); break;
+    case 'jailcard': deck.held.add(id); p.cards.push({ deck: deckName, id }); break;
+    case 'repairs': {
+      let houses = 0, hotels = 0;
+      for (const i of ownedIdx(room, p.id)) { const h = room.props[i].houses; if (h === 5) hotels++; else houses += h; }
+      const amt = houses * c.house + hotels * c.hotel;
+      if (amt > 0) charge(room, p, amt, 'bank', 'repairs'); else log(room, `${p.name} has no buildings to repair.`);
+      break;
+    }
+    case 'pay': charge(room, p, c.amt, 'bank', 'card'); break;
+    case 'payEach': {
+      const others = activePlayers(room).filter(o => o.id !== p.id);
+      charge(room, p, c.amt * others.length, 'each', 'paying each player', null, { each: c.amt });
+      break;
+    }
+    case 'collectEach':
+      for (const o of activePlayers(room)) {
+        if (o.id === p.id) continue;
+        const x = Math.min(c.amt, o.cash); o.cash -= x; p.cash += x;
+      }
+      break;
+  }
+}
+
+// ---------- auctions ----------
+function startAuction(room, index) {
+  const t = room.turn;
+  t.phase = 'auction';
+  t.data = { index, high: 0, bidder: null, endsAt: Date.now() + AUCTION_START_MS };
+  log(room, `Auction for ${SQUARES[index].name}! Place your bids.`);
+  armAuction(room);
+}
+
+function armAuction(room) {
+  clearTimeout(room.timer);
+  const ms = Math.max(0, room.turn.data.endsAt - Date.now()) + 60;
+  room.timer = setTimeout(() => {
+    room.timer = null;
+    try {
+      if (room.phase === 'playing' && room.turn && room.turn.phase === 'auction') { finalizeAuction(room); room.onChange(); }
+    } catch (e) { console.error(e); }
+  }, ms);
+}
+
+function finalizeAuction(room) {
+  clearTimeout(room.timer); room.timer = null;
+  const d = room.turn.data, s = SQUARES[d.index];
+  const w = d.bidder && getP(room, d.bidder);
+  if (w && !w.bankrupt && w.cash >= d.high) {
+    w.cash -= d.high; room.props[d.index].owner = w.id;
+    log(room, `${w.name} won the auction for ${s.name} at $${d.high}.`);
+  } else log(room, `No sale. ${s.name} stays with the bank.`);
+  finish(room);
+}
+
+// ---------- bankruptcy ----------
+function declareBankrupt(room, p, creditorId) {
+  const cred = creditorId && creditorId !== 'bank' ? getP(room, creditorId) : null;
+  log(room, `${p.name} is bankrupt${cred ? ' and hands everything to ' + cred.name : ''}!`);
+  for (const i of ownedIdx(room, p.id)) {
+    const pr = room.props[i];
+    if (pr.houses) { if (pr.houses === 5) room.hotelsLeft++; else room.housesLeft += pr.houses; pr.houses = 0; }
+    if (cred && !cred.bankrupt) {
+      pr.owner = cred.id;
+      if (pr.mortgaged) { const fee = Math.min(cred.cash, Math.round(SQUARES[i].price / 2 * 0.1)); cred.cash -= fee; } // 10% interest on mortgaged
+    } else { pr.owner = null; pr.mortgaged = false; }
+  }
+  if (cred && !cred.bankrupt) { cred.cash += p.cash; cred.cards.push(...p.cards); }
+  else for (const c of p.cards) room.decks[c.deck].held.delete(c.id);
+  p.cash = 0; p.cards = []; p.bankrupt = true; p.jail = false;
+  if (room.trade && (room.trade.from === p.id || room.trade.to === p.id)) room.trade = null;
+  const t = room.turn;
+  if (t.phase === 'auction' && t.data.bidder === p.id) { t.data.bidder = null; t.data.high = 0; }
+  if (activePlayers(room).length <= 1) return endGame(room);
+  if (t.pid === p.id) nextTurn(room);
+}
+
+// ---------- action guards ----------
+function manageGuard(room, p) {
+  if (room.phase !== 'playing') return fail('The game is not in progress.');
+  if (p.bankrupt) return fail('You are out of the game.');
+  if (room.turn.phase === 'auction') return fail('Wait until the auction ends.');
+  return null;
+}
+function inOwnDebt(room, p) { return room.turn.phase === 'debt' && room.turn.data.debtor === p.id; }
+function myTurn(room, p, phase) {
+  return room.phase === 'playing' && room.turn.pid === p.id && (!phase || room.turn.phase === phase);
+}
+
+// ---------- trades ----------
+function tradeItems(it) {
+  it = it || {};
+  return {
+    cash: Math.max(0, Math.floor(+it.cash || 0)),
+    props: (Array.isArray(it.props) ? it.props : []).map(Number).filter(Number.isInteger),
+    cards: Math.max(0, Math.floor(+it.cards || 0))
+  };
+}
+function validateTrade(room, tr) {
+  const a = getP(room, tr.from), b = getP(room, tr.to);
+  if (!a || !b || a === b || a.bankrupt || b.bankrupt) return 'Invalid players.';
+  const check = (giver, it) => {
+    if (it.cash > giver.cash) return `${giver.name} doesn't have $${it.cash}.`;
+    if (it.cards > giver.cards.length) return `${giver.name} doesn't have that many Get Out of Jail Free cards.`;
+    const seen = new Set();
+    for (const i of it.props) {
+      if (seen.has(i)) return 'Duplicate property in trade.';
+      seen.add(i);
+      const pr = room.props[i];
+      if (!pr || pr.owner !== giver.id) return `${giver.name} doesn't own ${SQUARES[i] ? SQUARES[i].name : 'that property'}.`;
+      const s = SQUARES[i];
+      if (s.type === 'street' && GROUPS[s.group].some(j => room.props[j].houses > 0)) return `${s.name} is in a color set with buildings. Sell the buildings first.`;
+    }
+    return null;
+  };
+  const e = check(a, tr.give) || check(b, tr.get);
+  if (e) return e;
+  const empty = it => !it.cash && !it.props.length && !it.cards;
+  if (empty(tr.give) && empty(tr.get)) return 'Add something to the trade.';
+  return null;
+}
+function mortgageFee(room, props) {
+  return props.reduce((sum, i) => sum + (room.props[i].mortgaged ? Math.round(SQUARES[i].price / 2 * 0.1) : 0), 0);
+}
+
+// ---------- actions ----------
+const ACTIONS = {
+  chat(room, p, m) {
+    const text = String(m.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 200);
+    if (!text) return fail('Say something first.');
+    const now = Date.now();
+    if (room.lastChat[p.id] && now - room.lastChat[p.id] < 400) return fail('Slow down a little.');
+    room.lastChat[p.id] = now;
+    room.feed.push({ type: 'chat', t: now, pid: p.id, name: p.name, color: p.color, text });
+    if (room.feed.length > 300) room.feed.splice(0, room.feed.length - 300);
+  },
+
+  setColor(room, p, m) {
+    if (room.phase !== 'lobby') return fail('You can only change color in the lobby.');
+    if (!COLORS.includes(m.color)) return fail('Unknown color.');
+    if (room.players.some(x => x.id !== p.id && x.color === m.color)) return fail('That color is taken.');
+    p.color = m.color;
+  },
+
+  setSettings(room, p, m) {
+    if (room.phase !== 'lobby' || room.hostId !== p.id) return fail('Only the host can change settings in the lobby.');
+    const s = room.settings;
+    if (m.startCash !== undefined) {
+      const v = Math.floor(+m.startCash);
+      if (!(v >= 100 && v <= 20000)) return fail('Starting cash must be between $100 and $20,000.');
+      s.startCash = v;
+    }
+    if (m.freeParking !== undefined) s.freeParking = !!m.freeParking;
+    if (m.auctions !== undefined) s.auctions = !!m.auctions;
+    if (m.botLevel !== undefined) {
+      if (m.botLevel !== 'strong' && m.botLevel !== 'casual') return fail('Unknown computer skill level.');
+      s.botLevel = m.botLevel;
+    }
+  },
+
+  addBot(room, p) {
+    if (room.phase !== 'lobby' || room.hostId !== p.id) return fail('Only the host can add computer players in the lobby.');
+    if (room.players.length >= MAX_PLAYERS) return fail('The room is full.');
+    const used = new Set(room.players.map(x => x.name));
+    const b = addPlayer(room, BOT_NAMES.find(n => !used.has(n)) || 'Bot', true);
+    log(room, `${b.name} (computer) joined.`);
+  },
+
+  leave(room, p) {
+    if (room.phase !== 'lobby') return fail('Use Resign to leave a game in progress.');
+    removeFromLobby(room, p);
+    return { dropPids: [p.id] };
+  },
+
+  start(room, p) {
+    if (room.phase !== 'lobby' || room.hostId !== p.id) return fail('Only the host can start the game.');
+    if (room.players.length < MIN_PLAYERS) return fail('You need at least 2 players.');
+    startGame(room);
+  },
+
+  kick(room, p, m) {
+    const target = getP(room, m.pid);
+    if (!target || target.id === p.id) return fail('Invalid player.');
+    if (room.phase === 'lobby') {
+      if (room.hostId !== p.id) return fail('Only the host can remove players.');
+      removeFromLobby(room, target);
+      return { dropPids: [target.id] };
+    }
+    if (room.phase !== 'playing') return fail('Not available right now.');
+    const hostOffline = !connected(room, room.hostId);
+    if (!(room.hostId === p.id || (hostOffline && !p.bankrupt))) return fail('Only the host can remove players.');
+    if (connected(room, target.id)) return fail('That player is still connected.');
+    if (target.bankrupt) return fail('That player is already out.');
+    log(room, `${target.name} was removed from the game.`);
+    if (room.hostId === target.id) room.hostId = p.id;
+    declareBankrupt(room, target, 'bank');
+  },
+
+  rematch(room, p) {
+    if (room.phase !== 'ended' || room.hostId !== p.id) return fail('Only the host can start a rematch.');
+    clearTimeout(room.timer); room.timer = null;
+    room.players = room.players.filter(x => connected(room, x.id));
+    if (!room.players.some(x => x.id === room.hostId)) room.hostId = room.players[0].id;
+    for (const x of room.players) { x.bankrupt = false; x.cash = 0; x.pos = 0; x.jail = false; x.cards = []; }
+    room.phase = 'lobby'; room.turn = null; room.trade = null; room.winner = null;
+    log(room, 'Back in the lobby for a rematch.');
+  },
+
+  roll(room, p) {
+    if (!myTurn(room, p, 'roll')) return fail("You can't roll right now.");
+    const t = room.turn;
+    const d1 = rollDie(), d2 = rollDie(), total = d1 + d2, dbl = d1 === d2;
+    room.lastRoll = [d1, d2]; room.rollId++;
+    log(room, `${p.name} rolled ${d1} + ${d2} = ${total}${dbl ? ' (doubles)' : ''}.`);
+    if (p.jail) {
+      if (dbl) {
+        p.jail = false; p.jailTurns = 0; t.doubles = 0;
+        log(room, `${p.name} rolled doubles and gets out of jail.`);
+        return void doMove(room, p, total);
+      }
+      p.jailTurns++;
+      if (p.jailTurns >= 3) {
+        log(room, `${p.name} missed doubles a third time and must pay $${JAIL_FEE}.`);
+        t.doubles = 0;
+        if (charge(room, p, JAIL_FEE, 'bank', 'jail fine', { type: 'jailMove', total })) {
+          p.jail = false; p.jailTurns = 0;
+          doMove(room, p, total);
+        }
+      } else {
+        log(room, `${p.name} stays in jail (${p.jailTurns}/3).`);
+        t.phase = 'end';
+      }
+      return;
+    }
+    if (dbl) {
+      t.doubles++;
+      if (t.doubles >= 3) {
+        log(room, `${p.name} rolled doubles three times in a row!`);
+        sendToJail(room, p); t.phase = 'end';
+        return;
+      }
+    } else t.doubles = 0;
+    doMove(room, p, total);
+  },
+
+  payJail(room, p) {
+    if (!myTurn(room, p, 'roll') || !p.jail) return fail("You can't do that right now.");
+    if (p.cash < JAIL_FEE) return fail(`You need $${JAIL_FEE}. Mortgage or sell something first.`);
+    pay(room, p, JAIL_FEE, 'bank');
+    p.jail = false; p.jailTurns = 0;
+    log(room, `${p.name} pays $${JAIL_FEE} to leave jail.`);
+  },
+
+  useCard(room, p) {
+    if (!myTurn(room, p, 'roll') || !p.jail) return fail("You can't do that right now.");
+    if (!p.cards.length) return fail('You have no Get Out of Jail Free card.');
+    const c = p.cards.shift();
+    room.decks[c.deck].held.delete(c.id);
+    p.jail = false; p.jailTurns = 0;
+    log(room, `${p.name} uses a Get Out of Jail Free card.`);
+  },
+
+  buy(room, p) {
+    if (!myTurn(room, p, 'buy')) return fail("There's nothing to buy right now.");
+    const i = room.turn.data.index, s = SQUARES[i];
+    if (p.cash < s.price) return fail(`You need $${s.price}. Mortgage or sell something first, or start an auction.`);
+    p.cash -= s.price; room.props[i].owner = p.id;
+    log(room, `${p.name} bought ${s.name} for $${s.price}.`);
+    finish(room);
+  },
+
+  decline(room, p) {
+    if (!myTurn(room, p, 'buy')) return fail("There's nothing to decline.");
+    const i = room.turn.data.index;
+    if (room.settings.auctions) startAuction(room, i);
+    else { log(room, `${p.name} passes on ${SQUARES[i].name}.`); finish(room); }
+  },
+
+  bid(room, p, m) {
+    const t = room.turn;
+    if (room.phase !== 'playing' || t.phase !== 'auction') return fail('There is no auction right now.');
+    if (p.bankrupt) return fail('You are out of the game.');
+    const amt = Math.floor(+m.amount);
+    if (!(amt > t.data.high)) return fail('Your bid must beat the current bid.');
+    if (amt > p.cash) return fail("You can't afford that bid.");
+    t.data.high = amt; t.data.bidder = p.id;
+    t.data.endsAt = Math.max(t.data.endsAt, Date.now() + AUCTION_BID_MS);
+    log(room, `${p.name} bids $${amt}.`);
+    armAuction(room);
+  },
+
+  endTurn(room, p) {
+    if (!myTurn(room, p, 'end')) return fail("You can't end your turn yet.");
+    nextTurn(room);
+  },
+
+  build(room, p, m) {
+    const e = manageGuard(room, p); if (e) return e;
+    if (inOwnDebt(room, p)) return fail('Settle your debt first.');
+    const i = Math.floor(+m.index), s = SQUARES[i], pr = room.props[i];
+    if (!s || s.type !== 'street' || !pr || pr.owner !== p.id) return fail("You don't own that street.");
+    const g = GROUPS[s.group];
+    if (!g.every(j => room.props[j].owner === p.id)) return fail('You need the whole color set to build.');
+    if (g.some(j => room.props[j].mortgaged)) return fail('Unmortgage every property in the set first.');
+    if (pr.houses >= 5) return fail('That street already has a hotel.');
+    if (pr.houses > Math.min(...g.map(j => room.props[j].houses))) return fail('Build evenly: add to the other streets in the set first.');
+    if (p.cash < s.house) return fail(`You need $${s.house}.`);
+    if (pr.houses === 4) {
+      if (room.hotelsLeft < 1) return fail('The bank has no hotels left.');
+      room.hotelsLeft--; room.housesLeft += 4;
+    } else {
+      if (room.housesLeft < 1) return fail('The bank has no houses left.');
+      room.housesLeft--;
+    }
+    p.cash -= s.house; pr.houses++;
+    log(room, `${p.name} built a ${pr.houses === 5 ? 'hotel' : 'house'} on ${s.name}.`);
+  },
+
+  sell(room, p, m) {
+    const e = manageGuard(room, p); if (e) return e;
+    const i = Math.floor(+m.index), s = SQUARES[i], pr = room.props[i];
+    if (!s || s.type !== 'street' || !pr || pr.owner !== p.id) return fail("You don't own that street.");
+    if (pr.houses < 1) return fail('There are no buildings to sell there.');
+    const g = GROUPS[s.group];
+    if (pr.houses < Math.max(...g.map(j => room.props[j].houses))) return fail('Sell evenly: sell from the street with the most buildings first.');
+    if (pr.houses === 5) {
+      if (room.housesLeft < 4) return fail('The bank does not have enough houses to replace the hotel.');
+      room.housesLeft -= 4; room.hotelsLeft++;
+    } else room.housesLeft++;
+    pr.houses--;
+    p.cash += Math.floor(s.house / 2);
+    log(room, `${p.name} sold a building on ${s.name} for $${Math.floor(s.house / 2)}.`);
+    trySettle(room);
+  },
+
+  mortgage(room, p, m) {
+    const e = manageGuard(room, p); if (e) return e;
+    const i = Math.floor(+m.index), s = SQUARES[i], pr = room.props[i];
+    if (!s || !pr || pr.owner !== p.id) return fail("You don't own that property.");
+    if (pr.mortgaged) return fail('Already mortgaged.');
+    if (s.type === 'street' && GROUPS[s.group].some(j => room.props[j].houses > 0)) return fail('Sell all buildings in this color set first.');
+    pr.mortgaged = true; p.cash += s.price / 2;
+    log(room, `${p.name} mortgaged ${s.name} for $${s.price / 2}.`);
+    trySettle(room);
+  },
+
+  unmortgage(room, p, m) {
+    const e = manageGuard(room, p); if (e) return e;
+    if (inOwnDebt(room, p)) return fail('Settle your debt first.');
+    const i = Math.floor(+m.index), s = SQUARES[i], pr = room.props[i];
+    if (!s || !pr || pr.owner !== p.id) return fail("You don't own that property.");
+    if (!pr.mortgaged) return fail("That property isn't mortgaged.");
+    const cost = Math.round(s.price / 2 * 1.1);
+    if (p.cash < cost) return fail(`You need $${cost}.`);
+    p.cash -= cost; pr.mortgaged = false;
+    log(room, `${p.name} paid $${cost} to unmortgage ${s.name}.`);
+  },
+
+  bankrupt(room, p) {
+    if (room.phase !== 'playing' || !inOwnDebt(room, p)) return fail("You can only declare bankruptcy when you're in debt.");
+    const c = room.turn.data.creditor;
+    declareBankrupt(room, p, c === 'each' ? 'bank' : c);
+  },
+
+  resign(room, p) {
+    if (room.phase !== 'playing' || p.bankrupt) return fail("You can't resign right now.");
+    log(room, `${p.name} resigned.`);
+    declareBankrupt(room, p, 'bank');
+  },
+
+  tradePropose(room, p, m) {
+    const e = manageGuard(room, p); if (e) return e;
+    if (room.trade) return fail('Another trade is already open. Wait for it to finish.');
+    const to = getP(room, m.to);
+    if (!to || to.bankrupt || to.id === p.id) return fail('Pick another player to trade with.');
+    const tr = { id: uid(), from: p.id, to: to.id, give: tradeItems(m.give), get: tradeItems(m.get) };
+    const err = validateTrade(room, tr);
+    if (err) return fail(err);
+    room.trade = tr;
+    log(room, `${p.name} proposed a trade to ${to.name}.`);
+  },
+
+  tradeAccept(room, p) {
+    const tr = room.trade;
+    if (!tr || tr.to !== p.id) return fail('No trade to accept.');
+    const e = manageGuard(room, p); if (e) return e;
+    const err = validateTrade(room, tr);
+    if (err) { room.trade = null; return fail('Trade cancelled: ' + err); }
+    const a = getP(room, tr.from), b = getP(room, tr.to);
+    const feeA = mortgageFee(room, tr.get.props);  // a receives b's props
+    const feeB = mortgageFee(room, tr.give.props); // b receives a's props
+    const cashA = a.cash - tr.give.cash + tr.get.cash, cashB = b.cash - tr.get.cash + tr.give.cash;
+    if (cashA < feeA) return fail(`${a.name} couldn't cover the 10% mortgage fee ($${feeA}).`);
+    if (cashB < feeB) return fail(`You need $${feeB} for the 10% fee on mortgaged properties you'd receive.`);
+    a.cash = cashA - feeA; b.cash = cashB - feeB;
+    if (room.settings.freeParking) room.pot += feeA + feeB;
+    tr.give.props.forEach(i => { room.props[i].owner = b.id; });
+    tr.get.props.forEach(i => { room.props[i].owner = a.id; });
+    const fromA = a.cards.splice(0, tr.give.cards), fromB = b.cards.splice(0, tr.get.cards);
+    b.cards.push(...fromA); a.cards.push(...fromB);
+    room.trade = null;
+    log(room, `${a.name} and ${b.name} completed a trade.`);
+    trySettle(room);
+  },
+
+  tradeDecline(room, p) {
+    const tr = room.trade;
+    if (!tr || tr.to !== p.id) return fail('No trade to decline.');
+    room.trade = null;
+    log(room, `${p.name} declined the trade.`);
+  },
+
+  tradeCancel(room, p) {
+    const tr = room.trade;
+    if (!tr || tr.from !== p.id) return fail('No trade to cancel.');
+    room.trade = null;
+    log(room, `${p.name} withdrew the trade offer.`);
+  }
+};
+
+function act(room, pid, m) {
+  room.last = Date.now();
+  const p = getP(room, pid);
+  if (!p) return fail('You are not in this room.');
+  const fn = ACTIONS[m && m.type];
+  if (!fn) return fail('Unknown action.');
+  try {
+    const r = fn(room, p, m) || {};
+    return r.error ? r : Object.assign({ ok: true }, r);
+  } catch (e) {
+    console.error(e);
+    return fail('Server error.');
+  }
+}
+
+
+// ---------- computer players ----------
+// Two skill levels. "casual" is a simple rule-of-thumb bot. "strong" (default) values everything from the numbers:
+// where tokens actually land, which colour sets pay best, what a monopoly is worth, what an opponent's monopoly costs it.
+
+// How often a token lands on each square per roll (simulated once, cached).
+let LAND_CACHE = null;
+function landFreq() {
+  if (LAND_CACHE) return LAND_CACHE;
+  let seed = 2463534242;
+  const rand = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
+  const die = () => 1 + Math.floor(rand() * 6);
+  const counts = new Float64Array(40);
+  let pos = 0, doubles = 0, total = 0;
+  const nearest = list => { const d = list.find(i => i > pos); return d === undefined ? list[0] : d; };
+  for (let n = 0; n < 300000; n++) {
+    const a = die(), b = die();
+    doubles = a === b ? doubles + 1 : 0;
+    if (doubles >= 3) { pos = 10; doubles = 0; counts[10]++; total++; continue; }
+    pos = (pos + a + b) % 40;
+    const kind = SQUARES[pos].type;
+    if (kind === 'gotojail') pos = 10;
+    else if (kind === 'chance') {
+      const r = Math.floor(rand() * 16);
+      if (r === 0) pos = 0; else if (r === 1) pos = 24; else if (r === 2) pos = 11;
+      else if (r === 3) pos = nearest(UTILS); else if (r === 4 || r === 5) pos = nearest(RAILS);
+      else if (r === 6) pos = 5; else if (r === 7) pos = 39; else if (r === 8) pos = (pos + 37) % 40; else if (r === 9) pos = 10;
+    } else if (kind === 'chest') {
+      const r = Math.floor(rand() * 16);
+      if (r === 0) pos = 0; else if (r === 1) pos = 10;
+    }
+    counts[pos]++; total++;
+  }
+  LAND_CACHE = Array.from(counts, c => c / total);
+  return LAND_CACHE;
+}
+
+// Per colour group: return on investment (rent at 3 houses x landing odds / cost) relative to the average group.
+let GROUP_CACHE = null;
+function groupStats() {
+  if (GROUP_CACHE) return GROUP_CACHE;
+  const f = landFreq(), roi = {}, names = Object.keys(GROUPS);
+  let sum = 0;
+  for (const g of names) {
+    let inc = 0, cost = 0;
+    for (const i of GROUPS[g]) { const s = SQUARES[i]; inc += s.rent[3] * f[i]; cost += s.price + 3 * s.house; }
+    roi[g] = inc / cost; sum += roi[g];
+  }
+  const avg = sum / names.length, st = {};
+  for (const g of names) {
+    const n = roi[g] / avg;
+    st[g] = { roi: n, mono: Math.max(1.7, Math.min(2.7, 2.1 + 0.6 * (n - 1))), base: 0.92 + 0.12 * (n - 1) };
+  }
+  GROUP_CACHE = st;
+  return st;
+}
+
+const ownArr = room => room.props.map(pr => pr ? pr.owner : null);
+
+// What a player's property holdings are worth, given who owns what (monopolies count for a lot).
+function portfolio(room, pid, own) {
+  const gs = groupStats();
+  let v = 0;
+  for (const g of Object.keys(GROUPS)) {
+    const idx = GROUPS[g], n = idx.length;
+    let k = 0, p = 0;
+    for (const i of idx) if (own[i] === pid) { k++; p += SQUARES[i].price * (room.props[i].mortgaged ? 0.55 : 1); }
+    if (!k) continue;
+    v += k === n ? p * gs[g].mono : p * gs[g].base * (1 + 0.22 * (k - 1) / (n - 1));
+  }
+  let m = 0, p = 0;
+  for (const i of RAILS) if (own[i] === pid) { m++; p += SQUARES[i].price * (room.props[i].mortgaged ? 0.55 : 1); }
+  if (m) v += p * (0.95 + 0.22 * (m - 1));
+  m = 0; p = 0;
+  for (const i of UTILS) if (own[i] === pid) { m++; p += SQUARES[i].price * (room.props[i].mortgaged ? 0.55 : 1); }
+  if (m) v += p * (0.8 + 0.25 * (m - 1));
+  return v;
+}
+// Change in a player's portfolio value if the given [square, newOwner] changes happened.
+function gain(room, pid, own, changes) {
+  const before = portfolio(room, pid, own), o2 = own.slice();
+  for (const [i, w] of changes) o2[i] = w;
+  return portfolio(room, pid, o2) - before;
+}
+
+const oppsOf = (room, b) => room.players.filter(x => !x.bankrupt && x.id !== b.id);
+function maxOppRent(room, b) {
+  let m = 0;
+  room.props.forEach((pr, i) => { if (pr && pr.owner && pr.owner !== b.id && !pr.mortgaged) m = Math.max(m, calcRent(room, i, 7)); });
+  return m;
+}
+function expectedLoss(room, b) { // average rent paid per landing, right now
+  const f = landFreq();
+  let s = 0;
+  room.props.forEach((pr, i) => { if (pr && pr.owner && pr.owner !== b.id && !pr.mortgaged) s += calcRent(room, i, 7) * f[i]; });
+  return s;
+}
+// Tunable knobs for the strong bot (tests can override them through globalThis.__STRAT).
+const STRAT_DEFAULT = { resCoef: 0, resCap: 900, buyRes: 0.3, build1: 0.2, build2: 0.4, unmort: 1.0, jailEL: 28, openFrac: 0.15, stepFrac: 0.2, tradeGap: 5, banRolls: 12, noFund: true, noPackage: true, noSwap: true };
+const P = () => (typeof globalThis !== 'undefined' && globalThis.__STRAT) ? Object.assign({}, STRAT_DEFAULT, globalThis.__STRAT) : STRAT_DEFAULT;
+// Cash to keep on hand: the rent it could really owe on its next move (squares 3-11 ahead, 2 and 12 count less),
+// plus a small cushion for the rest of the board.
+const DICE_W = [0, 0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
+function dangerAhead(room, b) {
+  const from = b.jail ? 10 : b.pos;
+  let core = 0, edge = 0;
+  for (let d = 2; d <= 12; d++) {
+    const i = (from + d) % 40, pr = room.props[i];
+    if (!pr || !pr.owner || pr.owner === b.id || pr.mortgaged) continue;
+    const r = calcRent(room, i, d);
+    if (DICE_W[d] >= 2) core = Math.max(core, r); else edge = Math.max(edge, r);
+  }
+  return core + 0.3 * Math.max(0, edge - core);
+}
+const botReserve = (room, b) => Math.max(60, Math.min(P().resCap, dangerAhead(room, b) + P().resCoef * maxOppRent(room, b) + 25));
+const holdsMono = (room, pid, g) => GROUPS[g].every(i => room.props[i].owner === pid);
+const completesSet = (room, b, i) => SQUARES[i].type === 'street' && GROUPS[SQUARES[i].group].every(j => j === i || room.props[j].owner === b.id);
+const tradableSq = (room, i) => { const s = SQUARES[i]; return !(s.type === 'street' && GROUPS[s.group].some(j => room.props[j].houses > 0)); };
+
+function strongBuy(room, b) {
+  const i = room.turn.data.index, price = SQUARES[i].price, own = ownArr(room), res = botReserve(room, b);
+  const dv = gain(room, b.id, own, [[i, b.id]]);
+  let denial = 0;
+  for (const x of oppsOf(room, b)) denial = Math.max(denial, gain(room, x.id, own, [[i, x.id]]));
+  const completes = completesSet(room, b, i);
+  const blocks = !P().noBlock && denial > price * 1.4; // it would hand somebody a monopoly
+  const value = dv + 0.5 * denial;
+  const go = (m, fb) => { const r = act(room, b.id, m); if (r.error && fb) act(room, b.id, fb); return true; };
+  if (b.cash < price) {
+    if ((completes || blocks) && value >= price) {
+      const junk = junkProps(room, b);
+      const avail = junk.reduce((s, c) => s + SQUARES[c.i].price / 2, 0);
+      if (b.cash + avail >= price + 20 && junk.length) return go({ type: 'mortgage', index: junk[0].i }, { type: 'decline' });
+    }
+    return go({ type: 'decline' });
+  }
+  const after = b.cash - price;
+  let ok = value >= price * 0.8 && after >= (completes || blocks ? 20 : res * P().buyRes);
+  if (ok && !completes && !blocks && value < price * 1.15) { // houses on a monopoly pay better than a marginal property
+    const need = cheapestBuildCost(room, b);
+    if (need && after < need + res) ok = false;
+  }
+  return go({ type: ok ? 'buy' : 'decline' }, { type: 'decline' });
+}
+
+// Properties it can mortgage without hurting a colour set, least valuable first.
+function junkProps(room, b) {
+  const own = ownArr(room), out = [];
+  for (const i of ownedIdx(room, b.id)) {
+    const s = SQUARES[i], pr = room.props[i];
+    if (pr.mortgaged) continue;
+    if (s.type === 'street' && (holdsMono(room, b.id, s.group) || GROUPS[s.group].some(j => room.props[j].houses > 0))) continue;
+    const o2 = own.slice(); o2[i] = null;
+    out.push({ i, loss: (portfolio(room, b.id, own) - portfolio(room, b.id, o2)) / (s.price / 2) });
+  }
+  return out.sort((a, c) => a.loss - c.loss);
+}
+
+function buildCandidates(room, b) {
+  const f = landFreq(), out = [];
+  for (const g of Object.keys(GROUPS)) {
+    if (!holdsMono(room, b.id, g) || GROUPS[g].some(j => room.props[j].mortgaged)) continue;
+    const minH = Math.min(...GROUPS[g].map(j => room.props[j].houses));
+    for (const i of GROUPS[g]) {
+      const s = SQUARES[i], h = room.props[i].houses;
+      if (h >= 5 || h !== minH) continue;
+      out.push({ i, h, cost: s.house, score: (s.rent[h + 1] - s.rent[h]) * f[i] / s.house });
+    }
+  }
+  return out;
+}
+const cheapestBuildCost = (room, b) => { const c = buildCandidates(room, b).filter(x => x.h < 3); return c.length ? Math.min(...c.map(x => x.cost)) : 0; };
+
+// Does an opponent hold a monopoly that is still under-built? Then hoarding houses (not buying hotels) starves them.
+function houseSqueeze(room, b) {
+  if (P().noSqueeze || room.housesLeft > 6) return false;
+  return Object.keys(GROUPS).some(g => {
+    const o = room.props[GROUPS[g][0]].owner;
+    return o && o !== b.id && holdsMono(room, o, g) && GROUPS[g].some(j => room.props[j].houses < 4);
+  });
+}
+
+function strongManage(room, b) {
+  const res = botReserve(room, b), go = m => !act(room, b.id, m).error;
+  const owned = ownedIdx(room, b.id);
+  // 1) lift mortgages that block a monopoly
+  for (const i of owned) {
+    const s = SQUARES[i];
+    if (!room.props[i].mortgaged) continue;
+    const cost = Math.round(s.price / 2 * 1.1);
+    if (s.type === 'street' && holdsMono(room, b.id, s.group) && b.cash >= cost + res * 0.6 && go({ type: 'unmortgage', index: i })) return true;
+  }
+  // 2) build where it pays best
+  const cands = buildCandidates(room, b).sort((x, y) => y.score - x.score);
+  const squeeze = houseSqueeze(room, b);
+  for (const c of cands) {
+    if (c.h === 4 && squeeze) continue;
+    if (b.cash < c.cost + (c.h >= 3 ? res * P().build2 : res * P().build1)) continue;
+    if (go({ type: 'build', index: c.i })) return true;
+  }
+  const next = cands.filter(c => !(c.h === 4 && squeeze)).sort((x, y) => y.score - x.score)[0];
+  // 4) lift other mortgages when comfortably rich and nothing needs the cash
+  if (!next || b.cash >= next.cost + res * P().unmort) {
+    for (const i of owned) {
+      if (!room.props[i].mortgaged) continue;
+      const cost = Math.round(SQUARES[i].price / 2 * 1.1);
+      if (b.cash >= cost + res * P().unmort + 100 && go({ type: 'unmortgage', index: i })) return true;
+    }
+  }
+  // 5) look for a deal
+  if (P().noPropose) return false;
+  return P().casualTrade ? botTrade(room, b) : strongPropose(room, b);
+}
+
+// Offer cash (or a swap) for properties that are worth more to us than to the owner.
+// Targets are single properties or every missing piece of a colour set held by one player.
+// The first offer is a fair opening bid; if it is turned down, the next try is higher.
+function strongPropose(room, b) {
+  if (room.trade || (b.nextTradeRoll || 0) > room.rollId) return false;
+  const own = ownArr(room), res = botReserve(room, b), pm = P();
+  const mine = ownedIdx(room, b.id).filter(i => tradableSq(room, i));
+  b.tries = b.tries || {}; b.banned = b.banned || {};
+  const junkRaise = junkProps(room, b).reduce((s, c) => s + SQUARES[c.i].price / 2, 0);
+  let best = null;
+  for (const x of oppsOf(room, b)) {
+    if (!connected(room, x.id)) continue;
+    const theirs = ownedIdx(room, x.id).filter(j => tradableSq(room, j));
+    const targets = theirs.map(j => [j]);
+    for (const g of Object.keys(GROUPS)) { // whole-set packages
+      const missing = GROUPS[g].filter(j => room.props[j].owner !== b.id);
+      if (!pm.noPackage && missing.length >= 2 && missing.length < GROUPS[g].length && missing.every(j => room.props[j].owner === x.id && tradableSq(room, j))) targets.push(missing);
+    }
+    for (const acq of targets) {
+      if (gain(room, b.id, own, acq.map(j => [j, b.id])) < 60) continue;
+      for (const i of (pm.noSwap ? [null] : [null, ...mine])) {
+        const key = `${x.id}:${acq.join('+')}:${i}`;
+        if (b.banned[key] > room.rollId) continue;
+        const ch = acq.map(j => [j, b.id]);
+        if (i !== null) ch.push([i, x.id]);
+        const dvb = gain(room, b.id, own, ch), dvx = gain(room, x.id, own, ch);
+        const sb = dvb - 0.5 * Math.max(0, dvx);   // worth to us, minus half of what we hand them
+        const lo = 30 - dvx, hi = sb - 40;          // what they need to break even, what we can afford to pay
+        if (lo > hi) continue;
+        const frac = Math.min(0.85, pm.openFrac + pm.stepFrac * (b.tries[key] || 0));
+        let c = Math.round((lo + (hi - lo) * frac) / 10) * 10;
+        const cap = Math.floor((b.cash - res * 0.6) / 10) * 10;
+        let fund = false;
+        if (c > cap) {
+          if (!pm.noFund && c <= cap + junkRaise && junkRaise > 0) fund = true;   // raise the cash by mortgaging spare property first
+          else { c = cap; if (c < lo) continue; }
+        }
+        if (c < 0 && x.cash < -c) continue;
+        if (!best || hi - lo > best.room) best = { x, acq, i, c, key, room: hi - lo, fund };
+      }
+    }
+  }
+  if (!best) return false;
+  if (best.fund) { // not enough cash yet: mortgage the least useful property and come back to it
+    const junk = junkProps(room, b);
+    if (junk.length && !act(room, b.id, { type: 'mortgage', index: junk[0].i }).error) return true;
+    return false;
+  }
+  b.nextTradeRoll = room.rollId + pm.tradeGap;
+  b.banned[best.key] = room.rollId + pm.banRolls;
+  b.tries[best.key] = (b.tries[best.key] || 0) + 1;
+  const r = act(room, b.id, {
+    type: 'tradePropose', to: best.x.id,
+    give: { cash: Math.max(0, best.c), props: best.i === null ? [] : [best.i], cards: 0 },
+    get: { cash: Math.max(0, -best.c), props: best.acq, cards: 0 }
+  });
+  return !r.error;
+}
+
+// Would the bot take this offer? Same valuation as above; it also counts how much the other side gains.
+function strongLikes(room, b, tr) {
+  const own = ownArr(room), ch = [];
+  for (const i of tr.give.props) ch.push([i, b.id]);
+  for (const i of tr.get.props) ch.push([i, tr.from]);
+  const dvb = gain(room, b.id, own, ch), dvx = gain(room, tr.from, own, ch);
+  let dc = tr.give.cash - tr.get.cash + 40 * (tr.give.cards - tr.get.cards);
+  for (const i of tr.give.props) if (room.props[i].mortgaged) dc -= Math.round(SQUARES[i].price / 2 * 0.1);
+  const score = dvb + dc - 0.5 * Math.max(0, dvx);
+  if (b.cash - tr.get.cash < botReserve(room, b) * 0.4 && score < 200) return false;
+  return score >= 30;
+}
+
+function strongAuction(room, bots) {
+  const t = room.turn, i = t.data.index, price = SQUARES[i].price, own = ownArr(room);
+  const opts = [];
+  for (const b of bots) {
+    if (t.data.bidder === b.id) continue;
+    let den = 0;
+    for (const x of oppsOf(room, b)) den = Math.max(den, gain(room, x.id, own, [[i, x.id]]));
+    const dv = gain(room, b.id, own, [[i, b.id]]);
+    const completes = completesSet(room, b, i);
+    const floor = completes ? 20 : Math.max(25, botReserve(room, b) * 0.5);
+    const max = Math.min(dv + 0.5 * den, b.cash - floor);
+    const high = t.data.high;
+    const inc = high < 100 ? 10 : high < 300 ? 20 : high < 700 ? 50 : 100;
+    const next = high ? high + inc : Math.max(10, Math.round(Math.min(price * 0.4, max) / 10) * 10);
+    if (next > high && next <= max) opts.push({ b, next });
+  }
+  if (!opts.length) return false;
+  const o = opts[rnd(opts.length)];
+  act(room, o.b.id, { type: 'bid', amount: o.next });
+  return true;
+}
+
+// Raise cash when in debt, losing as little as possible; if it cannot cover the debt, do not strip assets for the creditor.
+function strongDebt(room, b) {
+  const d = room.turn.data, need = d.amount - b.cash, gs = groupStats();
+  const owned = ownedIdx(room, b.id);
+  let maxRaise = 0;
+  for (const i of owned) {
+    const s = SQUARES[i], pr = room.props[i];
+    if (!pr.mortgaged) maxRaise += s.price / 2;
+    if (s.type === 'street') maxRaise += pr.houses * Math.floor(s.house / 2);
+  }
+  if (need > maxRaise) return !act(room, b.id, { type: 'bankrupt' }).error || true;
+  const tryAll = list => { for (const m of list) if (!act(room, b.id, m).error) return true; return false; };
+  const monoOf = i => SQUARES[i].type === 'street' && holdsMono(room, b.id, SQUARES[i].group);
+  // 1) mortgage properties that are not part of a monopoly
+  const t1 = owned.filter(i => !room.props[i].mortgaged && !monoOf(i))
+    .sort((a, c) => (SQUARES[a].group ? gs[SQUARES[a].group].roi : 0.5) * SQUARES[a].price - (SQUARES[c].group ? gs[SQUARES[c].group].roi : 0.5) * SQUARES[c].price)
+    .map(i => ({ type: 'mortgage', index: i }));
+  if (tryAll(t1)) return true;
+  // 2) sell buildings, worst colour group first, tallest street first
+  const t2 = owned.filter(i => SQUARES[i].type === 'street' && room.props[i].houses > 0)
+    .sort((a, c) => gs[SQUARES[a].group].roi - gs[SQUARES[c].group].roi || room.props[c].houses - room.props[a].houses)
+    .map(i => ({ type: 'sell', index: i }));
+  if (tryAll(t2)) return true;
+  // 3) anything left
+  const t3 = owned.filter(i => !room.props[i].mortgaged).map(i => ({ type: 'mortgage', index: i }));
+  if (tryAll(t3)) return true;
+  act(room, b.id, { type: 'bankrupt' });
+  return true;
+}
+
+function strongTurn(room, cur) {
+  const t = room.turn;
+  const go = (m, fb) => { const r = act(room, cur.id, m); if (r.error && fb) act(room, cur.id, fb); return true; };
+  switch (t.phase) {
+    case 'roll': {
+      if (strongManage(room, cur)) return true;
+      if (cur.jail) {
+        // Early on, get out and grab property. Late, when the board is dangerous, sit tight in jail.
+        const stay = expectedLoss(room, cur) > P().jailEL && cur.jailTurns < 2 && cur.cash >= botReserve(room, cur);
+        if (!stay) {
+          if (cur.cards.length) return go({ type: 'useCard' }, { type: 'roll' });
+          if (cur.cash >= 90) return go({ type: 'payJail' }, { type: 'roll' });
+        }
+      }
+      return go({ type: 'roll' });
+    }
+    case 'buy': return strongBuy(room, cur);
+    case 'debt': return P().casualDebt ? casualTurn(room, cur) : strongDebt(room, cur);
+    case 'end':
+      if (strongManage(room, cur)) return true;
+      return go({ type: 'endTurn' });
+    default: return false;
+  }
+}
+
+// ----- casual level (the earlier, simpler rules of thumb) -----
+function botManage(room, b) {
+  const owned = ownedIdx(room, b.id);
+  for (const i of owned) {
+    const pr = room.props[i];
+    if (pr.mortgaged) {
+      const cost = Math.round(SQUARES[i].price / 2 * 1.1);
+      if (b.cash >= cost + 400 && !act(room, b.id, { type: 'unmortgage', index: i }).error) return true;
+    }
+  }
+  for (const i of owned) {
+    const s = SQUARES[i];
+    if (s.type === 'street' && b.cash - s.house >= 120 && !act(room, b.id, { type: 'build', index: i }).error) return true;
+  }
+  return false;
+}
+
+function botLikes(room, b, tr) {
+  const price = i => SQUARES[i].price;
+  const worth = it => it.cash + it.props.reduce((s, i) => s + price(i), 0) * 1.0 + it.cards * 50;
+  const receives = tr.give, gives = tr.get;
+  for (const i of gives.props) {
+    const s = SQUARES[i];
+    if (s.type !== 'street') continue;
+    const mine = GROUPS[s.group].filter(j => room.props[j].owner === b.id).length;
+    if (mine >= GROUPS[s.group].length - 1) return false;
+  }
+  let bonus = 0;
+  for (const i of receives.props) {
+    const s = SQUARES[i];
+    if (s.type === 'street' && GROUPS[s.group].every(j => room.props[j].owner === b.id || j === i)) bonus += 250;
+  }
+  return worth(receives) + bonus >= worth(gives) * 1.6 && receives.cash <= 99999;
+}
+
+function botTrade(room, b) {
+  if (room.trade || b.nextTradeRoll > room.rollId) return false;
+  for (const g of Object.keys(GROUPS)) {
+    const idxs = GROUPS[g];
+    const mine = idxs.filter(i => room.props[i].owner === b.id);
+    const missing = idxs.filter(i => room.props[i].owner !== b.id);
+    if (missing.length !== 1 || mine.length < 1) continue;
+    const pr = room.props[missing[0]];
+    if (!pr.owner || pr.owner === b.id || pr.houses > 0) continue;
+    if (idxs.some(i => room.props[i].houses > 0)) continue;
+    const offer = Math.min(b.cash - 60, SQUARES[missing[0]].price * 2);
+    if (offer < SQUARES[missing[0]].price) continue;
+    b.nextTradeRoll = room.rollId + 12;
+    const r = act(room, b.id, { type: 'tradePropose', to: pr.owner, give: { cash: offer }, get: { props: [missing[0]] } });
+    if (!r.error) return true;
+  }
+  return false;
+}
+
+function casualAuction(room, bots) {
+  const t = room.turn, price = SQUARES[t.data.index].price;
+  for (const b of bots) {
+    const cap = Math.min(b.cash - 40, Math.round(price * b.valueMul));
+    const next = t.data.high + 10 + rnd(15);
+    if (t.data.bidder !== b.id && next <= cap && Math.random() < 0.5) { act(room, b.id, { type: 'bid', amount: next }); return true; }
+  }
+  return false;
+}
+
+function casualTurn(room, cur) {
+  const t = room.turn;
+  const go = m => { act(room, cur.id, m); return true; };
+  switch (t.phase) {
+    case 'roll':
+      if (!cur.jail && botManage(room, cur)) return true;
+      if (!cur.jail && botTrade(room, cur)) return true;
+      if (cur.jail) {
+        if (cur.cards.length) return go({ type: 'useCard' });
+        if (cur.cash >= 700 && Math.random() < 0.6) return go({ type: 'payJail' });
+      }
+      return go({ type: 'roll' });
+    case 'buy': {
+      const price = SQUARES[t.data.index].price;
+      return go({ type: cur.cash - price >= 40 ? 'buy' : 'decline' });
+    }
+    case 'debt': {
+      const owned = ownedIdx(room, cur.id);
+      for (const i of owned) if (!act(room, cur.id, { type: 'sell', index: i }).error) return true;
+      for (const i of owned) if (!act(room, cur.id, { type: 'mortgage', index: i }).error) return true;
+      return go({ type: 'bankrupt' });
+    }
+    case 'end':
+      if (botManage(room, cur)) return true;
+      if (botTrade(room, cur)) return true;
+      return go({ type: 'endTurn' });
+    default: return false;
+  }
+}
+
+const botLevel = (room, p) => p.level || room.settings.botLevel || 'strong';
+
+// One bot decision per call. Returns true if a bot did something.
+function botTick(room) {
+  if (room.phase !== 'playing') return false;
+  const bots = room.players.filter(p => p.bot && !p.bankrupt);
+  if (!bots.length) return false;
+  if (room.trade) {
+    const to = getP(room, room.trade.to);
+    if (to && to.bot) {
+      const like = botLevel(room, to) === 'strong' && !P().casualTrade ? strongLikes(room, to, room.trade) : botLikes(room, to, room.trade);
+      act(room, to.id, { type: like ? 'tradeAccept' : 'tradeDecline' });
+      return true;
+    }
+  }
+  const t = room.turn;
+  if (t.phase === 'auction') {
+    const strong = bots.filter(b => botLevel(room, b) === 'strong'), casual = bots.filter(b => botLevel(room, b) !== 'strong');
+    return (strong.length && (P().casualAuction ? casualAuction(room, strong) : strongAuction(room, strong))) || (casual.length && casualAuction(room, casual));
+  }
+  const cur = getP(room, t.pid);
+  if (!cur || !cur.bot) return false;
+  return botLevel(room, cur) === 'strong' ? strongTurn(room, cur) : casualTurn(room, cur);
+}
+
+// ---------- what each client sees ----------
+function view(room, pid) {
+  const t = room.turn;
+  let data = null;
+  if (t && t.data) { data = Object.assign({}, t.data); delete data.after; }
+  return {
+    code: room.code, phase: room.phase, hostId: room.hostId, you: pid, settings: room.settings,
+    serverTime: Date.now(),
+    players: room.players.map(p => ({
+      id: p.id, bot: !!p.bot, name: p.name, color: p.color, cash: p.cash, pos: p.pos, jail: p.jail, jailTurns: p.jailTurns,
+      bankrupt: p.bankrupt, cards: p.cards.length, connected: connected(room, p.id)
+    })),
+    props: room.props.map(pr => pr ? { owner: pr.owner, houses: pr.houses, mortgaged: pr.mortgaged } : null),
+    housesLeft: room.housesLeft, hotelsLeft: room.hotelsLeft, pot: room.pot,
+    turn: t ? { pid: t.pid, phase: t.phase, doubles: t.doubles, data } : null,
+    lastRoll: room.lastRoll, rollId: room.rollId, lastCard: room.lastCard,
+    trade: room.trade, feed: room.feed.slice(-100), winner: room.winner
+  };
+}
+
+module.exports = {
+  createRoom, join, act, view, botTick, COLORS, MAX_PLAYERS,
+  _test: { finalizeAuction, calcRent, SQUARES }
+};
+
+return module.exports;
+})();
+</script>
+<script>
+(() => {
+'use strict';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const money = n => '$' + Number(n).toLocaleString('en-US');
+const FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+const PEER_PREFIX = 'mono-online-v1-';
+const CODE_ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+let BOARD = null, S = null, prevS = null, net = null, session = null;
+let disp = {}, holdUntil = 0, shownDice = null, diceRolling = false, clockOffset = 0;
+let animating = false, animTarget = null, busyUntil = 0, queue = [], diceHold = 0, rollBusy = false, deltas = {}, landCell = -1;
+const SPEEDS = { relaxed: 1, normal: 0.6, fast: 0.3 };
+let speedKey = 'relaxed';
+try { const v = localStorage.getItem('mono-speed'); if (SPEEDS[v]) speedKey = v; } catch (e) { /* ignore */ }
+const sp = () => SPEEDS[speedKey];
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const uiBusy = () => animating || queue.length > 0 || Date.now() < busyUntil || !$('#cardpop').classList.contains('hidden');
+let seenCardN = null, boardBuilt = false, draft = null, toastTimer = null, leaving = false, unloading = false;
+window.addEventListener('pagehide', () => { unloading = true; });
+window.addEventListener('beforeunload', e => {
+  if (net && net.role === 'host' && S && S.phase === 'playing' && S.players.filter(p => !p.bot && !p.bankrupt).length > 1) { e.preventDefault(); e.returnValue = ''; }
+});
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } }
+};
+const sessions = () => store.get('mono_sessions') || {};
+function saveSession(s) { const all = sessions(); all[s.code] = { token: s.token }; store.set('mono_sessions', all); store.set('mono_last', s.code); }
+function setUrl(u) { try { history.replaceState(null, '', u); } catch (e) { /* file:// pages may refuse */ } }
+function dropSession(code) { const all = sessions(); delete all[code]; store.set('mono_sessions', all); if (store.get('mono_last') === code) store.set('mono_last', null); }
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+
+// ======================= networking =======================
+// One player is the HOST: their browser runs the game rules. Everyone else connects to the host with PeerJS.
+function newCode() { let c = ''; const a = new Uint32Array(5); crypto.getRandomValues(a); for (const x of a) c += CODE_ALPHA[x % CODE_ALPHA.length]; return c; }
+const peerOk = () => typeof Peer !== 'undefined';
+const clone = v => JSON.parse(JSON.stringify(v));
+
+function teardownNet() {
+  const n = net; net = null;
+  if (!n) return;
+  n.closing = true;
+  try {
+    if (n.role === 'host') {
+      clearTimeout(n.room.timer); clearTimeout(n.botTimer);
+      for (const c of n.room.conns) if (c.conn) { try { c.conn.send({ t: 'closed' }); } catch (e) { /* ignore */ } }
+    }
+    if (n.role === 'guest') { clearTimeout(n.timer); for (const f of n.pending.values()) f({ error: 'Disconnected.' }); }
+  } catch (e) { /* ignore */ }
+  const peer = n.peer;
+  setTimeout(() => { try { peer && peer.destroy(); } catch (e) { /* ignore */ } }, 250);
+}
+
+// ---------- host ----------
+function hostCreate(name, opts) {
+  opts = opts || {};
+  const code = newCode();
+  const { room, player } = GAME_MOD.createRoom(code, name);
+  net = { role: 'host', room, pid: player.id, peer: null, status: !opts.solo && peerOk() ? 'connecting' : 'offline', botTimer: null, solo: !!opts.solo };
+  room.conns.add({ pid: player.id, local: true });
+  room.onChange = hostChanged;
+  session = { code };
+  if (!opts.solo) hostOpenPeer(0);
+  hostChanged();
+}
+// Quick game against the computer: no internet needed.
+function soloStart(name, count, level) {
+  hostCreate(name, { solo: true });
+  const r = net.room, pid = net.pid;
+  GAME_MOD.act(r, pid, { type: 'setSettings', botLevel: level });
+  for (let i = 0; i < count; i++) GAME_MOD.act(r, pid, { type: 'addBot' });
+  GAME_MOD.act(r, pid, { type: 'start' });
+  hostChanged();
+}
+function hostOpenPeer(attempt) {
+  const n = net;
+  if (!n) return;
+  if (!peerOk()) { n.status = 'offline'; hostChanged(); return; }
+  let peer;
+  try { peer = new Peer(PEER_PREFIX + n.room.code); } catch (e) { n.status = 'offline'; hostChanged(); return; }
+  n.peer = peer;
+  peer.on('open', () => { if (net === n) { n.status = 'online'; hostChanged(); } });
+  peer.on('connection', conn => hostOnConnection(n, conn));
+  peer.on('disconnected', () => { if (net === n && !n.closing) { try { peer.reconnect(); } catch (e) { /* ignore */ } } });
+  peer.on('error', err => {
+    if (net !== n) return;
+    if (err.type === 'unavailable-id' && attempt < 6 && n.room.phase === 'lobby') {
+      try { peer.destroy(); } catch (e) { /* ignore */ }
+      n.room.code = newCode(); session.code = n.room.code;
+      hostOpenPeer(attempt + 1); hostChanged();
+    } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed' || err.type === 'unavailable-id') {
+      n.status = 'offline'; hostChanged();
+    }
+  });
+}
+function hostOnConnection(n, conn) {
+  conn.on('data', m => { if (net === n) hostHandle(n, conn, m); });
+  conn.on('close', () => { if (net === n) hostDrop(n, conn); });
+  conn.on('error', () => {});
+}
+function hostAttach(n, conn, p) {
+  for (const c of [...n.room.conns]) if (c.pid === p.id && c.conn && c.conn !== conn) { n.room.conns.delete(c); try { c.conn.close(); } catch (e) { /* ignore */ } }
+  conn.pid = p.id;
+  n.room.conns.add({ pid: p.id, conn });
+  try { conn.send({ t: 'joined', code: n.room.code, token: p.token, pid: p.id }); } catch (e) { /* ignore */ }
+}
+function hostDrop(n, conn) {
+  for (const c of [...n.room.conns]) if (c.conn === conn) n.room.conns.delete(c);
+  hostChanged();
+}
+function hostHandle(n, conn, m) {
+  if (!m || typeof m !== 'object') return;
+  const room = n.room;
+  const send = x => { try { conn.send(x); } catch (e) { /* ignore */ } };
+  if (m.t === 'join') {
+    if (conn.pid) return;
+    const name = String(m.name || '').trim();
+    if (!name) return send({ t: 'error', error: 'Enter your name first.' });
+    const r = GAME_MOD.join(room, name);
+    if (r.error) return send({ t: 'error', error: r.error });
+    hostAttach(n, conn, r.player); hostChanged();
+  } else if (m.t === 'rejoin') {
+    const p = room.players.find(x => !x.bot && typeof m.token === 'string' && x.token === m.token);
+    if (!p) return send({ t: 'gone' });
+    hostAttach(n, conn, p); hostChanged();
+  } else if (m.t === 'act') {
+    if (!conn.pid || !m.msg || typeof m.msg !== 'object') return;
+    const r = GAME_MOD.act(room, conn.pid, m.msg);
+    send({ t: 'result', id: m.id, error: r.error || null });
+    hostAfterAct(n, r); hostChanged();
+  }
+}
+function hostAfterAct(n, r) {
+  if (!r || !r.dropPids) return;
+  for (const c of [...n.room.conns]) {
+    if (!r.dropPids.includes(c.pid)) continue;
+    n.room.conns.delete(c);
+    if (c.conn) { const cn = c.conn; try { cn.send({ t: 'kicked' }); } catch (e) { /* ignore */ } setTimeout(() => { try { cn.close(); } catch (e) { /* ignore */ } }, 300); }
+  }
+}
+function hostBroadcast() {
+  const n = net;
+  if (!n || n.role !== 'host') return;
+  for (const c of n.room.conns) {
+    const v = GAME_MOD.view(n.room, c.pid);
+    if (c.local) onState(clone(v));
+    else { try { c.conn.send({ t: 'state', view: v }); } catch (e) { /* ignore */ } }
+  }
+}
+function hostChanged() { hostBroadcast(); scheduleBots(); }
+function scheduleBots(delay) {
+  const n = net;
+  if (!n || n.role !== 'host' || n.botTimer || n.room.phase !== 'playing' || !n.room.players.some(p => p.bot && !p.bankrupt)) return;
+  n.botTimer = setTimeout(() => {
+    n.botTimer = null;
+    if (net !== n) return;
+    if (uiBusy()) { scheduleBots(350); return; }
+    try { if (GAME_MOD.botTick(n.room)) hostBroadcast(); } catch (e) { console.error(e); }
+    scheduleBots();
+  }, delay || Math.round((1700 + Math.floor(Math.random() * 1100)) * sp()));
+}
+
+// ---------- guest ----------
+function openGuest(n, hello) {
+  return new Promise((resolve, reject) => {
+    if (!peerOk()) return reject(Object.assign(new Error('Joining online games needs an internet connection (the connection library could not load).'), { fatal: true }));
+    let settled = false;
+    const done = (fn, v) => { if (settled) return; settled = true; clearTimeout(n.timer); fn(v); };
+    const fail = (msg, fatal) => done(reject, Object.assign(new Error(msg), { fatal: !!fatal }));
+    n.timer = setTimeout(() => fail("Couldn't reach that room. Check the code, and make sure the host still has the game open."), 15000);
+    let peer;
+    try { peer = new Peer(); } catch (e) { return fail('Could not start the connection.'); }
+    n.peer = peer;
+    peer.on('error', err => {
+      if (net !== n) return;
+      if (err.type === 'peer-unavailable') fail("That room doesn't exist, or the host has closed it.");
+      else if (!settled) fail('Connection problem (' + err.type + ').');
+    });
+    peer.on('open', () => {
+      if (net !== n) return;
+      const conn = peer.connect(PEER_PREFIX + n.code, { reliable: true });
+      n.conn = conn;
+      conn.on('open', () => { try { conn.send(hello); } catch (e) { fail('Connection problem.'); } });
+      conn.on('data', m => guestMsg(n, m, { done, resolve, fail }));
+      conn.on('close', () => { if (settled && net === n) guestLost(n); });
+      conn.on('error', () => {});
+    });
+  });
+}
+function guestMsg(n, m, h) {
+  if (net !== n || !m || typeof m !== 'object') return;
+  if (m.t === 'joined') { n.token = m.token; n.joined = true; session = { code: n.code }; h.done(h.resolve, m); }
+  else if (m.t === 'error') h.fail(m.error || 'Could not join.', true);
+  else if (m.t === 'gone') h.fail('You are no longer in that game.', true);
+  else if (m.t === 'state') { $('#conn').classList.add('hidden'); onState(m.view); }
+  else if (m.t === 'result') { const f = n.pending.get(m.id); if (f) { n.pending.delete(m.id); f(m); } }
+  else if (m.t === 'kicked') { dropSession(n.code); setUrl(location.pathname); showHome(null, 'You were removed from the room.'); }
+  else if (m.t === 'closed') { dropSession(n.code); setUrl(location.pathname); showHome(null, 'The host closed the room.'); }
+}
+function guestLost(n) {
+  if (net !== n || leaving || unloading || n.closing || n.retrying) return;
+  n.retrying = true;
+  $('#conn').classList.remove('hidden');
+  let tries = 0;
+  const loop = () => {
+    if (net !== n) return;
+    if (++tries > 8) { dropSession(n.code); setUrl(location.pathname); showHome(null, 'Lost the connection to the host.'); return; }
+    try { n.peer && n.peer.destroy(); } catch (e) { /* ignore */ }
+    openGuest(n, { t: 'rejoin', token: n.token }).then(() => { n.retrying = false; $('#conn').classList.add('hidden'); })
+      .catch(err => {
+        if (net !== n) return;
+        if (err.fatal) { dropSession(n.code); setUrl(location.pathname); showHome(null, 'That game is no longer available.'); }
+        else setTimeout(loop, 2500);
+      });
+  };
+  loop();
+}
+async function guestJoin(code, hello) {
+  teardownNet();
+  const n = { role: 'guest', code, peer: null, conn: null, pending: new Map(), nextId: 1, token: hello.token || null, joined: false };
+  net = n;
+  try { await openGuest(n, hello); }
+  catch (e) { if (net === n) { teardownNet(); } throw e; }
+  saveSession({ code, token: n.token });
+  setUrl(`?room=${code}`);
+}
+
+// ---------- sending actions ----------
+async function act(type, extra) {
+  const n = net;
+  if (!n) return false;
+  const msg = Object.assign({}, extra || {}, { type });
+  if (n.role === 'host') {
+    const r = GAME_MOD.act(n.room, n.pid, msg);
+    if (r.error) { toast(r.error); return false; }
+    hostAfterAct(n, r); hostChanged();
+    return true;
+  }
+  return new Promise(resolve => {
+    const id = n.nextId++;
+    const t = setTimeout(() => { n.pending.delete(id); toast('The host is not responding.'); resolve(false); }, 8000);
+    n.pending.set(id, r => { clearTimeout(t); if (r && r.error) toast(r.error); resolve(!(r && r.error)); });
+    try { n.conn.send({ t: 'act', id, msg }); } catch (e) { clearTimeout(t); n.pending.delete(id); toast('Connection problem.'); resolve(false); }
+  });
+}
+
+const rc = i => i <= 10 ? [11, 11 - i] : i <= 20 ? [11 - (i - 10), 1] : i <= 30 ? [1, 1 + (i - 20)] : [1 + (i - 30), 11];
+const P = id => S.players.find(p => p.id === id);
+const me = () => S.players.find(p => p.id === S.you);
+const baseUrl = () => /^https?:$/.test(location.protocol) ? location.origin + location.pathname : null;
+const inviteUrl = () => { const b = baseUrl(); return b ? `${b}?room=${S.code}` : null; };
+const inviteText = () => inviteUrl() ? `Join my Monopoly game! ${inviteUrl()}  (room code ${S.code})` : `Join my Monopoly game! Open the Monopoly page, click Join and enter room code ${S.code}`;
+const dot = p => `<span class="dot" style="background:${esc(p.color)}"></span>`;
+
+// ---------- screens ----------
+function show(id) {
+  for (const s of ['home', 'lobby', 'game']) $('#' + s).classList.toggle('hidden', s !== id);
+}
+function showHome(inviteCode, message) {
+  teardownNet();
+  session = null; S = null; prevS = null; disp = {}; boardBuilt = false;
+  closeOverlays();
+  $('#conn').classList.add('hidden');
+  document.title = 'Monopoly Online';
+  show('home');
+  $('#nameInput').value = store.get('mono_name') || '';
+  const banner = $('#inviteBanner');
+  if (inviteCode) {
+    banner.classList.remove('hidden');
+    banner.innerHTML = `You've been invited to room <b style="letter-spacing:3px">${esc(inviteCode)}</b>. Enter your name and join!`;
+    $('#codeInput').value = inviteCode;
+  } else banner.classList.add('hidden');
+  const last = store.get('mono_last');
+  const rj = $('#rejoinBtn');
+  if (last && sessions()[last] && last !== inviteCode) { rj.classList.remove('hidden'); rj.textContent = `Rejoin room ${last}`; rj.onclick = () => rejoin(last); }
+  else rj.classList.add('hidden');
+  if (message) toast(message);
+}
+function closeOverlays() { for (const id of ['modal', 'incoming', 'cardpop', 'endscreen']) $('#' + id).classList.add('hidden'); draft = null; }
+
+// ---------- joining ----------
+async function rejoin(code) {
+  const ses = sessions()[code];
+  if (!ses) return;
+  try { await guestJoin(code, { t: 'rejoin', token: ses.token }); }
+  catch (e) { if (e.fatal) dropSession(code); setUrl(location.pathname); showHome(null, e.message); }
+}
+
+function onState(st) {
+  if (animating && animTarget && queue.length === 0 && st.phase === 'playing' && st.rollId === animTarget.rollId) { animTarget = st; return; }
+  queue.push(st);
+  pump();
+}
+let pumping = false;
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  try {
+    while (queue.length) {
+      const st = queue.shift();
+      const rolled = S && S.phase === 'playing' && st.phase === 'playing' && st.rollId !== S.rollId && st.lastRoll;
+      if (rolled) await animateRoll(st); else apply(st);
+    }
+  } catch (e) { console.error(e); }
+  pumping = false;
+}
+async function animateRoll(st) {
+  const old = S, rid = st.turn.pid;
+  const before = old.players.find(p => p.id === rid), after0 = st.players.find(p => p.id === rid);
+  animating = true; animTarget = st; rollBusy = false;
+  shownDice = st.lastRoll; diceRolling = false;
+  renderCenter();
+  await wait(1000 * sp());
+  // walk the token to where the dice say it lands
+  if (before && after0 && disp[rid] !== undefined) {
+    const total = st.lastRoll[0] + st.lastRoll[1];
+    let target = null;
+    if (before.jail && after0.jail) target = null;
+    else {
+      target = (before.pos + total) % 40;
+      if (!before.jail && after0.jail && target !== 30) target = null; // three doubles: straight to jail
+    }
+    if (target !== null && target !== disp[rid]) {
+      let guard = 0;
+      while (disp[rid] !== target && guard++ < 14) {
+        disp[rid] = (disp[rid] + 1) % 40;
+        renderTokens();
+        await wait(240 * sp());
+      }
+      disp[rid] = target; renderTokens();
+      landCell = target;
+      const cell = document.querySelector(`#board .cell[data-i="${target}"]`);
+      if (cell) { cell.classList.remove('land'); void cell.offsetWidth; cell.classList.add('land'); }
+      await wait(900 * sp());
+    }
+  }
+  const fin = animTarget; animTarget = null; animating = false;
+  holdUntil = Date.now() + 2000 * sp();
+  diceHold = Date.now() + 1800 * sp();
+  apply(fin);
+  busyUntil = Date.now() + 1300 * sp();
+  await wait(1300 * sp());
+}
+function apply(st) {
+  const old = S;
+  prevS = S; S = st;
+  clockOffset = st.serverTime - Date.now();
+  if (st.phase === 'lobby') { closeOverlays(); show('lobby'); renderLobby(); return; }
+  show('game');
+  if (!boardBuilt) buildBoard();
+  for (const p of S.players) if (disp[p.id] === undefined) disp[p.id] = p.pos;
+  if (old && old.phase === 'playing') {
+    for (const p of S.players) {
+      const o = old.players.find(x => x.id === p.id);
+      if (o && o.cash !== p.cash) deltas[p.id] = { d: p.cash - o.cash, until: Date.now() + 2600 };
+    }
+  }
+  if (S.turn && S.turn.phase !== 'roll') shownDice = S.lastRoll;
+  renderGame();
+}
+
+// ---------- lobby ----------
+function renderLobby() {
+  const m = me(), host = S.hostId === S.you;
+  $('#lobbyCode').textContent = S.code;
+  const link = inviteUrl();
+  $('#inviteRow').classList.toggle('hidden', !link);
+  $('#inviteNote').classList.toggle('hidden', !!link);
+  if (link) $('#inviteLink').value = link;
+  else $('#inviteNote').textContent = 'Friends join by opening this same page and typing the room code. (Invite links work once the page is hosted on a website.)';
+  const ns = $('#netStatus');
+  if (net && net.role === 'host') ns.textContent = net.status === 'online' ? '🟢 Online: friends can join with this code' : net.status === 'connecting' ? '🟡 Connecting…' : "🔴 Offline: friends can't join, but you can still play against computer players";
+  else ns.textContent = '';
+  $('#shareBtn').classList.toggle('hidden', !navigator.share || !link);
+  $('#pcount').textContent = `(${S.players.length}/8)`;
+  $('#lobbyPlayers').innerHTML = S.players.map(p => `
+    <div class="pitem">${dot(p)}<div class="grow"><b>${esc(p.name)}</b>${p.id === S.you ? ' <span class="muted">(you)</span>' : ''}${p.id === S.hostId ? ' <span class="badge">host</span>' : ''}${p.bot ? ' <span class="badge">🤖 computer</span>' : ''}${p.connected ? '' : ' <span class="badge">offline</span>'}</div>
+    ${host && p.id !== S.you ? `<button class="mini bad" data-a="kick" data-p="${p.id}">Remove</button>` : ''}</div>`).join('');
+  const palette = BOARD.palette, used = new Set(S.players.filter(p => p.id !== S.you).map(p => p.color));
+  $('#swatches').innerHTML = palette.map(c => `<button class="sw ${m.color === c ? 'sel' : ''}" style="background:${c}" data-a="color" data-c="${c}" ${used.has(c) ? 'disabled' : ''}></button>`).join('');
+  const s = S.settings;
+  const cashOpts = [500, 1000, 1500, 2000, 3000, 5000];
+  $('#lobbySettings').innerHTML = `
+    <h3 class="muted" style="font-size:12px;letter-spacing:2px;margin-bottom:4px">GAME SETTINGS ${host ? '' : '(host only)'}</h3>
+    <label>Starting cash <select id="setCash" ${host ? '' : 'disabled'}>${cashOpts.map(c => `<option value="${c}" ${s.startCash === c ? 'selected' : ''}>${money(c)}</option>`).join('')}</select></label>
+    <label>Auction unbought properties <input type="checkbox" id="setAuc" ${s.auctions ? 'checked' : ''} ${host ? '' : 'disabled'}></label>
+    <label>Free Parking jackpot (taxes &amp; fines go to the pot) <input type="checkbox" id="setFp" ${s.freeParking ? 'checked' : ''} ${host ? '' : 'disabled'}></label>
+    <label>Computer skill <select id="setBot" ${host ? '' : 'disabled'}><option value="strong" ${s.botLevel !== 'casual' ? 'selected' : ''}>Strong</option><option value="casual" ${s.botLevel === 'casual' ? 'selected' : ''}>Casual</option></select></label>`;
+  $('#setCash').onchange = e => act('setSettings', { startCash: +e.target.value });
+  $('#setAuc').onchange = e => act('setSettings', { auctions: e.target.checked });
+  $('#setFp').onchange = e => act('setSettings', { freeParking: e.target.checked });
+  $('#setBot').onchange = e => act('setSettings', { botLevel: e.target.value });
+  $('#lobbyActions').innerHTML = (host
+    ? `<button class="ghost" data-a="addBot" ${S.players.length >= 8 ? 'disabled' : ''}>+ Add computer player</button><button class="primary" data-a="startGame" ${S.players.length < 2 ? 'disabled' : ''}>${S.players.length < 2 ? 'Waiting for more players…' : 'Start game'}</button>`
+    : `<div class="muted" style="text-align:center">Waiting for the host to start…</div>`)
+    + `<button class="ghost" data-a="leave">Leave room</button>`;
+}
+
+// ---------- board ----------
+function buildBoard() {
+  const b = $('#board');
+  [...b.querySelectorAll('.cell')].forEach(e => e.remove());
+  BOARD.squares.forEach(s => {
+    const [r, c] = rc(s.i);
+    const side = s.i % 10 === 0 ? 'c' : s.i < 10 ? 'b' : s.i < 20 ? 'l' : s.i < 30 ? 't' : 'r';
+    const el = document.createElement('div');
+    el.className = `cell ${side} t-${s.type}`;
+    el.style.gridRow = r; el.style.gridColumn = c; el.dataset.i = s.i; el.dataset.a = 'propInfo';
+    let inner = '';
+    if (s.type === 'street') inner = `<div class="bar" style="background:${BOARD.colors[s.group]}"><div class="hs"></div></div><div class="body"><div class="nm">${esc(s.name)}</div><div class="pr">${money(s.price)}</div></div>`;
+    else if (s.type === 'rail') inner = `<div class="body"><div class="ico">🚂</div><div class="nm">${esc(s.name)}</div><div class="pr">${money(s.price)}</div></div>`;
+    else if (s.type === 'util') inner = `<div class="body"><div class="ico">${s.i === 12 ? '💡' : '🚰'}</div><div class="nm">${esc(s.name)}</div><div class="pr">${money(s.price)}</div></div>`;
+    else if (s.type === 'chance') inner = `<div class="body"><div class="ico" style="color:#e8590c">?</div><div class="nm">CHANCE</div></div>`;
+    else if (s.type === 'chest') inner = `<div class="body"><div class="ico">🎁</div><div class="nm">COMMUNITY CHEST</div></div>`;
+    else if (s.type === 'tax') inner = `<div class="body"><div class="ico">💸</div><div class="nm">${esc(s.name.toUpperCase())}</div><div class="pr">PAY ${money(s.amount)}</div></div>`;
+    else if (s.type === 'go') inner = `<div class="big">GO</div><div>COLLECT $200</div><div style="font-size:2.4cqw">⬅</div>`;
+    else if (s.type === 'jail') inner = `<div class="big" style="font-size:1.9cqw">JAIL</div><div>JUST VISITING</div>`;
+    else if (s.type === 'parking') inner = `<div class="big" style="font-size:1.6cqw">FREE PARKING</div><div style="font-size:2.4cqw">🚗</div>`;
+    else if (s.type === 'gotojail') inner = `<div class="big" style="font-size:1.6cqw">GO TO JAIL</div><div style="font-size:2.4cqw">👮</div>`;
+    el.innerHTML = inner + '<div class="tokens"></div>';
+    b.appendChild(el);
+  });
+  boardBuilt = true;
+}
+
+function updateBoard() {
+  const cells = document.querySelectorAll('#board .cell');
+  cells.forEach(el => {
+    const i = +el.dataset.i, pr = S.props[i], s = BOARD.squares[i];
+    if (!pr) return;
+    el.style.boxShadow = pr.owner ? `inset 0 0 0 .38cqw ${P(pr.owner).color}` : '';
+    el.classList.toggle('mort', pr.mortgaged);
+    if (s.type === 'street') {
+      const hs = el.querySelector('.hs');
+      hs.innerHTML = pr.houses === 5 ? '<i class="H"></i>' : '<i></i>'.repeat(pr.houses);
+    }
+  });
+  renderTokens();
+}
+function renderTokens() {
+  const by = {};
+  for (const p of S.players) if (!p.bankrupt) (by[disp[p.id]] = by[disp[p.id]] || []).push(p);
+  document.querySelectorAll('#board .cell').forEach(el => {
+    const list = by[+el.dataset.i] || [];
+    el.querySelector('.tokens').innerHTML = list.map(p => `<span class="tok ${p.jail && +el.dataset.i === 10 ? 'jail' : ''}" style="background:${esc(p.color)}" title="${esc(p.name)}">${esc(p.name[0].toUpperCase())}</span>`).join('');
+  });
+}
+(function walkLoop() {
+  try {
+    if (S && S.phase !== 'lobby' && Date.now() >= holdUntil && !animating) {
+      let moved = false;
+      for (const p of S.players) {
+        if (disp[p.id] === undefined || disp[p.id] === p.pos) continue;
+        const d = (p.pos - disp[p.id] + 40) % 40;
+        disp[p.id] = d <= 12 ? (disp[p.id] + 1) % 40 : p.pos;
+        moved = true;
+      }
+      if (moved) renderTokens();
+    }
+  } catch (e) { console.error(e); }
+  setTimeout(walkLoop, Math.max(70, 240 * sp()));
+})();
+
+// ---------- dice ----------
+const PIPS = [[4], [0, 8], [0, 4, 8], [0, 2, 6, 8], [0, 2, 4, 6, 8], [0, 2, 3, 5, 6, 8]];
+function dieHtml(v, cls) {
+  const on = new Set(PIPS[v - 1]);
+  let s = '';
+  for (let i = 0; i < 9; i++) s += `<i class="${on.has(i) ? 'on' : ''}"></i>`;
+  return `<span class="${cls}">${s}</span>`;
+}
+function spinning() {
+  return !!S && S.phase === 'playing' && S.turn && S.turn.phase === 'roll' && !animating && Date.now() >= diceHold;
+}
+function diceHtml() {
+  const sp_ = spinning();
+  if (sp_ && !shownDice) shownDice = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+  if (!shownDice) return '<div class="muted" style="font-size:2.4cqw">Roll the dice!</div>';
+  const cls = sp_ ? 'die roll' : 'die';
+  return dieHtml(shownDice[0], cls) + dieHtml(shownDice[1], cls) + (sp_ ? '' : `<span class="total">= ${shownDice[0] + shownDice[1]}</span>`);
+}
+let lastSpinState = false;
+setInterval(() => {
+  const s = spinning();
+  if (s) {
+    let a = 1 + Math.floor(Math.random() * 6), b = 1 + Math.floor(Math.random() * 6);
+    if (shownDice && a === shownDice[0] && b === shownDice[1]) a = a % 6 + 1;
+    shownDice = [a, b];
+    paintDice();
+  } else if (lastSpinState) paintDice();
+  lastSpinState = s;
+}, 80);
+function paintDice() { const d = $('#dice'); if (d) d.innerHTML = diceHtml(); }
+
+// ---------- center ----------
+function propPreview(i) {
+  const s = BOARD.squares[i];
+  const col = s.group ? BOARD.colors[s.group] : '#cfd8dc';
+  const dark = s.group === 'yellow' || s.group === 'lightblue' || !s.group;
+  let body = `Price ${money(s.price)}`;
+  if (s.type === 'street') body += `<br>Rent ${money(s.rent[0])} · Set ${money(s.rent[0] * 2)}<br>1🏠 ${money(s.rent[1])} · 2🏠 ${money(s.rent[2])}<br>3🏠 ${money(s.rent[3])} · 4🏠 ${money(s.rent[4])}<br>🏨 ${money(s.rent[5])}`;
+  else if (s.type === 'rail') body += '<br>Rent $25 / $50 / $100 / $200';
+  else body += '<br>Rent 4× or 10× the dice';
+  return `<div class="pcard"><div class="ph" style="background:${col};color:${dark ? '#111' : '#fff'}">${esc(s.name)}</div><div class="pb">${body}</div></div>`;
+}
+
+function renderCenter() {
+  const el = $('#center'), t = S.turn, cur = P(t.pid), m = me(), mine = t.pid === S.you;
+  const d = t.data;
+  let h = `<div class="logo">MONOPOLY</div>`;
+  h += `<div class="c-title">${dot(cur)} ${mine ? 'Your turn' : esc(cur.name) + "'s turn"}</div>`;
+  const canRoll = !animating && t.phase === 'roll' && mine;
+  h += `<div class="dice ${canRoll ? 'clk' : ''}" id="dice" ${canRoll ? 'data-a="roll" title="Click to stop the dice"' : ''}>${diceHtml()}</div>`;
+  if (S.settings.freeParking) h += `<div class="pot">🅿 Free Parking pot: ${money(S.pot)}</div>`;
+  const msg = x => `<div class="c-msg">${x}</div>`;
+  const acts = x => `<div class="acts">${x}</div>`;
+  const btn = (a, label, cls, extra) => `<button class="${cls || ''}" data-a="${a}" ${extra || ''}>${label}</button>`;
+
+  if (animating) {
+    h += msg(`${mine ? 'You rolled' : esc(cur.name) + ' rolled'}… moving the piece.`);
+  } else if (t.phase === 'roll') {
+    if (mine) {
+      if (cur.jail) {
+        h += msg(`You're in jail (attempt ${cur.jailTurns + 1} of 3). Roll doubles to get out, or pay the fine.`);
+        h += acts(btn('roll', '🎲 Stop dice (roll for doubles)', 'primary') + btn('payJail', 'Pay $50', '', cur.cash < 50 ? 'disabled' : '') + (cur.cards > 0 ? btn('useCard', 'Use Get Out of Jail Free', 'good') : ''));
+      } else {
+        h += msg(t.doubles > 0 ? 'Doubles! Click the dice (or the button) to stop them and roll again.' : 'The dice are spinning. Click them to stop and move.');
+        h += acts(btn('roll', '🎲 Stop the dice!', 'primary'));
+      }
+    } else h += msg(cur.jail ? `${esc(cur.name)} is in jail…` : `Waiting for ${esc(cur.name)} to roll…`);
+  } else if (t.phase === 'buy') {
+    const price = BOARD.squares[d.index].price;
+    h += propPreview(d.index);
+    if (mine) {
+      h += acts(btn('buy', `Buy for ${money(price)}`, 'good', cur.cash < price ? 'disabled' : '') + btn('decline', S.settings.auctions ? 'Auction it' : 'Pass', 'ghost'));
+      if (cur.cash < price) h += msg(`You have ${money(cur.cash)}. Mortgage or sell buildings (bottom right) to afford it, or auction it.`);
+    } else h += msg(`${esc(cur.name)} is deciding whether to buy ${esc(BOARD.squares[d.index].name)}.`);
+  } else if (t.phase === 'auction') {
+    h += propPreview(d.index);
+    const bidder = d.bidder ? P(d.bidder) : null;
+    h += `<div class="bidbox"><div class="hi">${money(d.high)}</div><div>${bidder ? `${dot(bidder)} ${esc(bidder.name)}` : 'No bids yet'}</div><div class="tm" id="aucTimer"></div></div>`;
+    if (m && !m.bankrupt) {
+      h += acts([10, 50, 100, 500].map(inc => btn('bid', `+${money(inc)}`, 'primary', `data-inc="${inc}" ${d.high + inc > m.cash ? 'disabled' : ''}`)).join(''));
+      h += msg(`Your cash: ${money(m.cash)}. Highest bid when the timer hits 0 wins.`);
+    }
+  } else if (t.phase === 'debt') {
+    const debtor = P(d.debtor), cred = d.creditor === 'bank' ? 'the bank' : d.creditor === 'each' ? 'each player' : esc(P(d.creditor).name);
+    if (d.debtor === S.you) {
+      h += msg(`<b>You owe ${money(d.amount)}</b> to ${cred} (${esc(d.reason)}) and have ${money(debtor.cash)}. Sell buildings, mortgage properties, or trade to raise the cash. It's paid automatically once you have enough.`);
+      h += acts(btn('bankrupt', 'Declare bankruptcy', 'bad'));
+    } else h += msg(`${esc(debtor.name)} owes ${money(d.amount)} to ${cred} and is raising cash…`);
+  } else if (t.phase === 'end') {
+    if (mine) h += acts(btn('endTurn', 'End turn', 'primary')) + msg('You can still build, trade or manage properties first.');
+    else h += msg(`${esc(cur.name)} is finishing their turn…`);
+  }
+  if (t.phase !== 'buy' && t.phase !== 'auction') {
+    const logs = S.feed.filter(e => e.type !== 'chat').slice(-2);
+    if (logs.length) h += `<div class="ticker">${logs.map(e => `<div>${esc(e.text)}</div>`).join('')}</div>`;
+  }
+  el.innerHTML = h;
+  paintAuctionTimer();
+}
+function paintAuctionTimer() {
+  const e = $('#aucTimer');
+  if (!e || !S || !S.turn || S.turn.phase !== 'auction') return;
+  const left = Math.max(0, Math.ceil((S.turn.data.endsAt - (Date.now() + clockOffset)) / 1000));
+  e.textContent = `⏱ ${left}s`;
+}
+setInterval(paintAuctionTimer, 250);
+
+// ---------- players & assets ----------
+function renderPlayers() {
+  const hostOffline = !P(S.hostId).connected;
+  $('#players').innerHTML = S.players.map(p => {
+    const canTrade = p.id !== S.you && !p.bankrupt && !me().bankrupt && !S.trade && S.turn.phase !== 'auction' && S.phase === 'playing';
+    const canKick = S.phase === 'playing' && !p.connected && !p.bankrupt && p.id !== S.you && (S.hostId === S.you || (hostOffline && !me().bankrupt));
+    return `<div class="pl ${S.turn.pid === p.id && S.phase === 'playing' ? 'turn' : ''} ${p.bankrupt ? 'out' : ''}">
+      ${dot(p)}<div class="pn"><b>${esc(p.name)}</b>${p.id === S.you ? ' <span class="muted">(you)</span>' : ''}${p.id === S.hostId ? '<span class="badge">host</span>' : ''}${p.bot ? '<span class="badge">🤖</span>' : ''}${p.jail ? '<span class="badge">🔒 jail</span>' : ''}${p.cards ? `<span class="badge">🎟 ×${p.cards}</span>` : ''}${p.connected ? '' : '<span class="badge" style="color:#f88">offline</span>'}</div>
+      <div class="pc">${deltas[p.id] && deltas[p.id].until > Date.now() ? `<span class="delta ${deltas[p.id].d > 0 ? 'up' : 'dn'}">${deltas[p.id].d > 0 ? '+' : '−'}${money(Math.abs(deltas[p.id].d))}</span>` : ''}${money(p.cash)}</div>
+      ${canTrade ? `<button class="mini" data-a="trade" data-p="${p.id}">Trade</button>` : ''}
+      ${canKick ? `<button class="mini bad" data-a="kick" data-p="${p.id}">Remove</button>` : ''}
+    </div>`;
+  }).join('');
+  const tr = S.trade;
+  if (tr && tr.from === S.you) $('#players').innerHTML += `<div class="pl"><div class="pn muted">Waiting for ${esc(P(tr.to).name)} to answer your trade…</div><button class="mini ghost" data-a="tradeCancel">Cancel</button></div>`;
+}
+
+function groupHas(g, fn) { return BOARD.groups[g].every(fn); }
+function manageOK() { return S.phase === 'playing' && !me().bankrupt && S.turn.phase !== 'auction'; }
+function canBuild(i) {
+  const s = BOARD.squares[i], pr = S.props[i], m = me();
+  if (!manageOK() || s.type !== 'street' || pr.owner !== S.you) return false;
+  if (S.turn.phase === 'debt' && S.turn.data.debtor === S.you) return false;
+  const g = BOARD.groups[s.group];
+  if (!g.every(j => S.props[j].owner === S.you) || g.some(j => S.props[j].mortgaged)) return false;
+  if (pr.houses >= 5 || pr.houses > Math.min(...g.map(j => S.props[j].houses))) return false;
+  if (m.cash < s.house) return false;
+  return pr.houses === 4 ? S.hotelsLeft > 0 : S.housesLeft > 0;
+}
+function canSell(i) {
+  const s = BOARD.squares[i], pr = S.props[i];
+  if (!manageOK() || s.type !== 'street' || pr.owner !== S.you || pr.houses < 1) return false;
+  if (pr.houses < Math.max(...BOARD.groups[s.group].map(j => S.props[j].houses))) return false;
+  return pr.houses === 5 ? S.housesLeft >= 4 : true;
+}
+function canMortgage(i) {
+  const s = BOARD.squares[i], pr = S.props[i];
+  if (!manageOK() || pr.owner !== S.you || pr.mortgaged) return false;
+  return !(s.type === 'street' && BOARD.groups[s.group].some(j => S.props[j].houses > 0));
+}
+const unmortgageCost = i => Math.round(BOARD.squares[i].price / 2 * 1.1);
+function canUnmortgage(i) {
+  const pr = S.props[i];
+  if (!manageOK() || pr.owner !== S.you || !pr.mortgaged) return false;
+  if (S.turn.phase === 'debt' && S.turn.data.debtor === S.you) return false;
+  return me().cash >= unmortgageCost(i);
+}
+
+function renderAssets() {
+  const m = me();
+  const owned = S.props.map((pr, i) => pr && pr.owner === S.you ? i : -1).filter(i => i >= 0);
+  let h = `<h3>YOUR PROPERTIES <span>${money(m.cash)}</span></h3>`;
+  if (m.bankrupt) h += '<div class="muted">You are out of the game. You can keep watching and chatting.</div>';
+  else if (!owned.length) h += '<div class="muted">You don\'t own any properties yet.</div>';
+  const colorOf = i => { const s = BOARD.squares[i]; return s.group ? BOARD.colors[s.group] : s.type === 'rail' ? '#555' : '#9aa'; };
+  for (const i of owned) {
+    const s = BOARD.squares[i], pr = S.props[i];
+    const bld = pr.houses === 5 ? '🏨' : '🏠'.repeat(pr.houses);
+    h += `<div class="arow"><span class="chip" style="background:${colorOf(i)}"></span>
+      <span class="an ${pr.mortgaged ? 'm' : ''}" data-a="propInfo" data-i="${i}">${esc(s.name)} <span class="hs2">${bld}</span>${pr.mortgaged ? ' <span class="badge">mortgaged</span>' : ''}</span>
+      ${s.type === 'street' ? `<button class="mini" data-a="build" data-i="${i}" ${canBuild(i) ? '' : 'disabled'}>Build ${money(s.house)}</button><button class="mini" data-a="sell" data-i="${i}" ${canSell(i) ? '' : 'disabled'}>Sell +${money(Math.floor(s.house / 2))}</button>` : ''}
+      ${pr.mortgaged ? `<button class="mini good" data-a="unmortgage" data-i="${i}" ${canUnmortgage(i) ? '' : 'disabled'}>Unmortgage ${money(unmortgageCost(i))}</button>` : `<button class="mini" data-a="mortgage" data-i="${i}" ${canMortgage(i) ? '' : 'disabled'}>Mortgage +${money(s.price / 2)}</button>`}
+    </div>`;
+  }
+  h += `<div class="muted" style="margin-top:8px;font-size:12px">Bank: ${S.housesLeft} houses · ${S.hotelsLeft} hotels left</div>`;
+  const a = $('#assets'), top = a.scrollTop;
+  a.innerHTML = h; a.scrollTop = top;
+}
+
+function renderFeed() {
+  const f = $('#feed'), atBottom = f.scrollTop + f.clientHeight >= f.scrollHeight - 30;
+  f.innerHTML = S.feed.map(e => e.type === 'chat'
+    ? `<div class="chat"><b style="color:${esc(e.color)}">${esc(e.name)}:</b> ${esc(e.text)}</div>`
+    : `<div class="log">${esc(e.text)}</div>`).join('');
+  if (atBottom) f.scrollTop = f.scrollHeight;
+}
+
+// ---------- modals ----------
+function itemsText(it) {
+  const parts = [];
+  if (it.cash) parts.push(money(it.cash));
+  it.props.forEach(i => parts.push(BOARD.squares[i].name));
+  if (it.cards) parts.push(`${it.cards} Get Out of Jail Free card${it.cards > 1 ? 's' : ''}`);
+  return parts.length ? parts.map(esc).join(', ') : 'nothing';
+}
+function renderIncoming() {
+  const box = $('#incoming'), tr = S.trade;
+  if (!tr || tr.to !== S.you) { box.classList.add('hidden'); return; }
+  const from = P(tr.from);
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="box"><h2>Trade offer from ${dot(from)} ${esc(from.name)}</h2>
+    <p style="margin:8px 0"><b>They give you:</b> ${itemsText(tr.give)}</p>
+    <p style="margin:8px 0"><b>They want from you:</b> ${itemsText(tr.get)}</p>
+    <p class="muted" style="font-size:13px">Mortgaged properties cost a 10% fee when you receive them.</p>
+    <div class="row" style="margin-top:14px"><button class="good" data-a="tradeAccept" style="flex:1">Accept</button><button class="bad" data-a="tradeDecline" style="flex:1">Decline</button></div></div>`;
+}
+function renderCardPop() {
+  const c = S.lastCard;
+  if (seenCardN === null) { seenCardN = c ? c.n : 0; return; }
+  if (!c || c.n === seenCardN) return;
+  seenCardN = c.n;
+  const p = P(c.pid), box = $('#cardpop');
+  const chance = c.deck === 'chance';
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="gcard" style="background:${chance ? '#ffd9a6' : '#c6e5fb'};color:#111"><h3>${chance ? 'CHANCE' : 'COMMUNITY CHEST'}</h3><div class="muted" style="color:#222;margin-bottom:8px">${esc(p.name)} drew:</div><p>${esc(c.text)}</p><div class="muted" style="color:#444;margin-top:10px;font-size:12px">click to dismiss</div></div>`;
+  clearTimeout(renderCardPop.t);
+  renderCardPop.t = setTimeout(() => box.classList.add('hidden'), Math.max(3500, 8000 * sp()));
+}
+function renderEnd() {
+  const box = $('#endscreen');
+  if (S.phase !== 'ended') { box.classList.add('hidden'); return; }
+  const w = S.winner ? P(S.winner) : null;
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="box" style="text-align:center"><h2>Game over</h2><div class="win">🏆 ${w ? `${dot(w)} ${esc(w.name)} wins!` : 'No winner'}</div>
+    <div class="stack">${S.hostId === S.you ? ('<button class="primary" data-a="rematch">' + (net && net.solo ? 'Play again' : 'Back to lobby (rematch)') + '</button>') : '<div class="muted">Waiting for the host to start a rematch…</div>'}<button class="ghost" data-a="exit">Leave room</button></div></div>`;
+}
+
+function showProp(i) {
+  const s = BOARD.squares[i], pr = S.props[i];
+  let body = '';
+  if (s.type === 'street') {
+    body = `<table>
+      <tr><td>Rent</td><td>${money(s.rent[0])}</td></tr><tr><td>With full color set</td><td>${money(s.rent[0] * 2)}</td></tr>
+      <tr><td>With 1 house</td><td>${money(s.rent[1])}</td></tr><tr><td>With 2 houses</td><td>${money(s.rent[2])}</td></tr>
+      <tr><td>With 3 houses</td><td>${money(s.rent[3])}</td></tr><tr><td>With 4 houses</td><td>${money(s.rent[4])}</td></tr>
+      <tr><td>With hotel</td><td>${money(s.rent[5])}</td></tr>
+      <tr><td>Houses/hotel cost</td><td>${money(s.house)} each</td></tr></table>`;
+  } else if (s.type === 'rail') body = '<table><tr><td>1 railroad</td><td>$25</td></tr><tr><td>2 railroads</td><td>$50</td></tr><tr><td>3 railroads</td><td>$100</td></tr><tr><td>4 railroads</td><td>$200</td></tr></table>';
+  else if (s.type === 'util') body = '<table><tr><td>1 utility</td><td>4× dice</td></tr><tr><td>2 utilities</td><td>10× dice</td></tr></table>';
+  else body = `<div style="padding:14px">${s.type === 'tax' ? 'Pay ' + money(s.amount) + '.' : 'Not a property.'}</div>`;
+  let foot = '';
+  if (pr) {
+    foot = `Price ${money(s.price)} · Mortgage value ${money(s.price / 2)}<br>${pr.owner ? `Owner: <b>${esc(P(pr.owner).name)}</b>${pr.mortgaged ? ' (mortgaged)' : ''}${pr.houses ? ` · ${pr.houses === 5 ? 'Hotel' : pr.houses + ' house' + (pr.houses > 1 ? 's' : '')}` : ''}` : 'Unowned'}`;
+  }
+  const col = s.group ? BOARD.colors[s.group] : '#cfd8dc';
+  const dark = s.group === 'yellow' || s.group === 'lightblue' || !s.group;
+  const box = $('#modal');
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="box"><div class="pcardbig"><div class="ph" style="background:${col};color:${dark ? '#111' : '#fff'}">${esc(s.name)}</div>${body}${foot ? `<div class="ft">${foot}</div>` : ''}</div>
+    <div style="text-align:center;margin-top:14px"><button data-a="closeModal">Close</button></div></div>`;
+}
+
+function tradable(pid) {
+  return S.props.map((pr, i) => pr && pr.owner === pid ? i : -1).filter(i => {
+    if (i < 0) return false;
+    const s = BOARD.squares[i];
+    return !(s.type === 'street' && BOARD.groups[s.group].some(j => S.props[j].houses > 0));
+  });
+}
+function openTrade(otherId) {
+  draft = { to: otherId, give: { cash: 0, props: new Set(), cards: 0 }, get: { cash: 0, props: new Set(), cards: 0 } };
+  const o = P(otherId), m = me();
+  const col = (title, who, side) => {
+    const list = tradable(who.id);
+    return `<div class="tcol"><h3>${title}</h3>
+      <label class="muted" style="font-size:12px">Cash (you have ${money(who.cash)})</label>
+      <input type="number" min="0" max="${who.cash}" value="0" data-side="${side}" data-f="cash" style="margin-bottom:8px">
+      ${list.length ? list.map(i => { const s = BOARD.squares[i]; return `<label class="tp"><input type="checkbox" data-side="${side}" data-f="prop" value="${i}"><span class="chip" style="background:${s.group ? BOARD.colors[s.group] : '#778'}"></span>${esc(s.name)}${S.props[i].mortgaged ? ' <span class="badge">mortgaged</span>' : ''}</label>`; }).join('') : '<div class="muted" style="font-size:13px">No tradable properties</div>'}
+      ${who.cards ? `<label class="muted" style="font-size:12px;display:block;margin-top:8px">Get Out of Jail Free cards (max ${who.cards})</label><input type="number" min="0" max="${who.cards}" value="0" data-side="${side}" data-f="cards">` : ''}
+    </div>`;
+  };
+  const box = $('#modal');
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="box"><h2>Trade with ${dot(o)} ${esc(o.name)}</h2>
+    <div class="tgrid">${col('You give', m, 'give')}${col('You get', o, 'get')}</div>
+    <p class="muted" style="font-size:12px;margin-top:10px">Streets in a color set that has buildings can't be traded. Mortgaged properties cost the receiver a 10% fee.</p>
+    <div class="row" style="margin-top:12px"><button class="primary" data-a="sendTrade" style="flex:1">Send offer</button><button class="ghost" data-a="closeModal">Cancel</button></div></div>`;
+}
+$('#modal').addEventListener('input', e => {
+  const el = e.target;
+  if (!draft || !el.dataset.side) return;
+  const side = draft[el.dataset.side];
+  if (el.dataset.f === 'cash') side.cash = Math.max(0, Math.floor(+el.value || 0));
+  else if (el.dataset.f === 'cards') side.cards = Math.max(0, Math.floor(+el.value || 0));
+  else if (el.dataset.f === 'prop') { if (el.checked) side.props.add(+el.value); else side.props.delete(+el.value); }
+});
+async function sendTrade() {
+  if (!draft) return;
+  const f = x => ({ cash: x.cash, props: [...x.props], cards: x.cards });
+  if (await act('tradePropose', { to: draft.to, give: f(draft.give), get: f(draft.get) })) { $('#modal').classList.add('hidden'); draft = null; toast('Trade offer sent.'); }
+}
+
+// ---------- render game ----------
+function renderGame() {
+  $('#gCode').textContent = S.code;
+  $('#resignBtn').classList.toggle('hidden', S.phase !== 'playing' || me().bankrupt);
+  $('#sideTop [data-a=copyInvite]').classList.toggle('hidden', !!(net && net.solo));
+  updateBoard();
+  renderCenter();
+  renderPlayers();
+  renderAssets();
+  renderFeed();
+  renderIncoming();
+  renderCardPop();
+  renderEnd();
+  document.title = (S.phase === 'playing' && S.turn.pid === S.you) ? '▶ Your turn · Monopoly' : 'Monopoly Online';
+}
+
+// ---------- click handlers ----------
+async function copyText(txt, okMsg) {
+  try { await navigator.clipboard.writeText(txt); toast(okMsg); }
+  catch (e) { window.prompt('Copy this:', txt); }
+}
+const H = {
+  roll: async () => { if (rollBusy || animating) return; rollBusy = true; const ok = await act('roll'); if (!ok) rollBusy = false; else setTimeout(() => { rollBusy = false; }, 2500); }, buy: () => act('buy'), decline: () => act('decline'),
+  bid: d => act('bid', { amount: S.turn.data.high + Number(d.inc) }),
+  endTurn: () => act('endTurn'), payJail: () => act('payJail'), useCard: () => act('useCard'),
+  build: d => act('build', { index: +d.i }), sell: d => act('sell', { index: +d.i }),
+  mortgage: d => act('mortgage', { index: +d.i }), unmortgage: d => act('unmortgage', { index: +d.i }),
+  bankrupt: () => { if (confirm('Declare bankruptcy? You will be out of the game.')) act('bankrupt'); },
+  resign: () => { if (confirm('Resign from the game?')) act('resign'); },
+  trade: d => openTrade(d.p), sendTrade,
+  tradeAccept: () => act('tradeAccept'), tradeDecline: () => act('tradeDecline'), tradeCancel: () => act('tradeCancel'),
+  kick: d => { if (confirm('Remove this player?')) act('kick', { pid: d.p }); },
+  color: d => act('setColor', { color: d.c }),
+  startGame: () => act('start'),
+  addBot: () => act('addBot'),
+  leave: async () => {
+    if (!net) return;
+    if (net.role === 'host') {
+      if (S && S.players.some(p => !p.bot && p.id !== S.you) && !confirm('You are the host. Leaving closes the room for everyone. Leave anyway?')) return;
+      setUrl(location.pathname); showHome(); return;
+    }
+    const code = session.code;
+    leaving = true;
+    const ok = await act('leave');
+    leaving = false;
+    if (ok) { dropSession(code); setUrl(location.pathname); showHome(); }
+  },
+  exit: () => { if (session) dropSession(session.code); setUrl(location.pathname); showHome(); },
+  rematch: async () => { if (await act('rematch') && net && net.solo) act('start'); },
+  propInfo: d => showProp(+d.i),
+  closeModal: () => { $('#modal').classList.add('hidden'); draft = null; },
+  copyInvite: () => copyText(inviteUrl() || inviteText(), inviteUrl() ? 'Invite link copied!' : 'Invite message copied!'),
+  copyCode: () => copyText(S.code, 'Room code copied!'),
+  shareInvite: () => navigator.share({ title: 'Join my Monopoly game', text: `Join my Monopoly game! Room code: ${S.code}`, url: inviteUrl() || undefined }).catch(() => {})
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.disabled) return;
+  const h = H[el.dataset.a];
+  if (h) h(el.dataset, el);
+});
+{ const sel = $('#spdSel'); sel.value = speedKey; sel.onchange = () => { speedKey = sel.value; try { localStorage.setItem('mono-speed', speedKey); } catch (e) { /* ignore */ } }; }
+$('#modal').addEventListener('mousedown', e => { if (e.target.id === 'modal') H.closeModal(); });
+$('#cardpop').addEventListener('click', () => $('#cardpop').classList.add('hidden'));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') H.closeModal();
+  const tag = (document.activeElement && document.activeElement.tagName) || '';
+  if (e.code === 'Space' && S && S.phase === 'playing' && tag !== 'INPUT' && tag !== 'BUTTON' && tag !== 'SELECT') {
+    const b = document.querySelector('#center .acts button.primary:not(:disabled)');
+    if (b) { e.preventDefault(); b.click(); }
+  }
+});
+$('#chatForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const inp = $('#chatInput'), text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  await act('chat', { text });
+});
+
+// ---------- home actions ----------
+async function enter(kind) {
+  const name = $('#nameInput').value.trim() || (kind === 'solo' ? 'You' : '');
+  if (!name) { toast('Enter your name first.'); $('#nameInput').focus(); return; }
+  if ($('#nameInput').value.trim()) store.set('mono_name', name);
+  if (kind === 'solo') { soloStart(name, +$('#soloCount').value || 1, $('#soloLevel').value); return; }
+  if (kind === 'create') { hostCreate(name); return; }
+  const code = $('#codeInput').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!code) { toast('Enter the room code.'); return; }
+  $('#joinBtn').disabled = true; $('#joinBtn').textContent = 'Joining…';
+  try { await guestJoin(code, { t: 'join', name }); }
+  catch (e) { toast(e.message); }
+  $('#joinBtn').disabled = false; $('#joinBtn').textContent = 'Join';
+}
+$('#createBtn').onclick = () => enter('create');
+$('#soloBtn').onclick = () => enter('solo');
+$('#joinBtn').onclick = () => enter('join');
+$('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') enter('join'); });
+$('#nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') enter($('#codeInput').value.trim() ? 'join' : 'create'); });
+
+// ---------- boot ----------
+(function init() {
+  BOARD = { squares: BOARD_MOD.SQUARES, groups: BOARD_MOD.GROUPS, colors: BOARD_MOD.GROUP_COLORS, palette: GAME_MOD.COLORS };
+  const inv = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (inv) {
+    if (sessions()[inv]) { show('home'); rejoin(inv).then(() => {}); return; }
+    showHome(inv);
+  } else showHome();
+})();
+})();
+</script>
+</body>
+</html>
