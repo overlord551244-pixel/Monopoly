@@ -1625,12 +1625,16 @@ function soloStart(name, count, level) {
   GAME_MOD.act(r, pid, { type: 'start' });
   hostChanged();
 }
+const PEER_OPTS = { config: { iceCandidatePoolSize: 4, iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' }
+] } };
 function hostOpenPeer(attempt) {
   const n = net;
   if (!n) return;
   if (!peerOk()) { n.status = 'offline'; hostChanged(); return; }
   let peer;
-  try { peer = new Peer(PEER_PREFIX + n.room.code); } catch (e) { n.status = 'offline'; hostChanged(); return; }
+  try { peer = new Peer(PEER_PREFIX + n.room.code, PEER_OPTS); } catch (e) { n.status = 'offline'; hostChanged(); return; }
   n.peer = peer;
   peer.on('open', () => { if (net === n) { n.status = 'online'; hostChanged(); } });
   peer.on('connection', conn => hostOnConnection(n, conn));
@@ -1720,9 +1724,9 @@ function openGuest(n, hello) {
     let settled = false;
     const done = (fn, v) => { if (settled) return; settled = true; clearTimeout(n.timer); fn(v); };
     const fail = (msg, fatal) => done(reject, Object.assign(new Error(msg), { fatal: !!fatal }));
-    n.timer = setTimeout(() => fail("Couldn't reach that room. Check the code, and make sure the host still has the game open."), 15000);
+    n.timer = setTimeout(() => fail("Couldn't reach that room. Check the code, and make sure the host still has the game open."), 30000);
     let peer;
-    try { peer = new Peer(); } catch (e) { return fail('Could not start the connection.'); }
+    try { peer = new Peer(undefined, PEER_OPTS); } catch (e) { return fail('Could not start the connection.'); }
     n.peer = peer;
     peer.on('error', err => {
       if (net !== n) return;
